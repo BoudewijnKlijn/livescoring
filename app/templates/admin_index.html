@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Wedstrijden{% endblock %}
+{% block kop %}Wedstrijden{% endblock %}
+{% block headeractie %}
+<form method="post" action="/admin/logout"><button class="secundair knop">Uitloggen</button></form>
+{% endblock %}
+{% block inhoud %}
+<div class="kaart">
+  <h2>Nieuwe wedstrijd</h2>
+  <form method="post" action="/admin/competition" class="rij">
+    <input type="text" name="naam" placeholder="Clubkampioenschap 2026" style="flex:1;min-width:200px">
+    <button class="knop" type="submit">Aanmaken</button>
+  </form>
+</div>
+
+{% for c in competitions %}
+<div class="kaart">
+  <h2>{{ c.name }}</h2>
+  <p class="klein">{{ c.rounds|length }} ronde(n) · status {{ c.status }}</p>
+  <div class="rij">
+    <a class="knop" href="/admin/c/{{ c.id }}">Beheren</a>
+    <a class="knop secundair" href="/admin/c/{{ c.id }}/live">Live</a>
+    <a class="knop secundair" href="/l/{{ c.leaderboard_slug }}">Leaderboard</a>
+  </div>
+</div>
+{% else %}
+<p>Nog geen wedstrijden.</p>
+{% endfor %}
+{% endblock %}

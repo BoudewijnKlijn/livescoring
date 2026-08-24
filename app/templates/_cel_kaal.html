@@ -1,0 +1,17 @@
+{#- Eén invoercel: waarde van deze bron, met de waarde van de andere bron klein erbij. -#}
+{%- set error = error|default(none) -%}
+{%- set eigen = row.self_strokes if source == 'self' else row.marker_strokes -%}
+{%- set ander = row.marker_strokes if source == 'self' else row.self_strokes -%}
+<td class="cel {% if row.conflict %}conflict{% elif row.agreed %}eens{% endif %}{% if error %} mislukt{% endif %}"
+    id="cel-{{ entry.id }}-{{ row.hole }}-{{ source }}"{% if error %} title="{{ error }}"{% endif %}>
+  <input class="score" type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="20"
+         name="strokes" value="{{ eigen if eigen is not none else '' }}"
+         aria-label="Hole {{ row.hole }}"
+         {% if entry.locked %}disabled{% endif %}
+         hx-post="/api/score" hx-trigger="change" hx-include="closest td"
+         hx-target="closest td" hx-swap="outerHTML">
+  <input type="hidden" name="entry_id" value="{{ entry.id }}">
+  <input type="hidden" name="hole" value="{{ row.hole }}">
+  <input type="hidden" name="source" value="{{ source }}">
+  {% if ander is not none and ander != eigen %}<span class="ander">{{ ander }}</span>{% endif %}
+</td>

@@ -1,0 +1,3 @@
+{#- Antwoord op POST /api/score: de bijgewerkte cel plus de stand van die kaart. -#}
+{% include "_cel_kaal.html" %}
+<div id="stand-{{ entry.id }}" hx-swap-oob="true" class="stand">{% include "_stand.html" %}</div>

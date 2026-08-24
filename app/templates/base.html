@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>{% block title %}Live scoring{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+<header>
+  <div>
+    <div class="titel">{% block kop %}Live scoring{% endblock %}</div>
+    <div class="sub">{% block subkop %}{% endblock %}</div>
+  </div>
+  {% block headeractie %}{% endblock %}
+</header>
+<main>
+{% block inhoud %}{% endblock %}
+</main>
+</body>
+</html>

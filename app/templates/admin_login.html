@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Wedstrijdleiding{% endblock %}
+{% block kop %}Wedstrijdleiding{% endblock %}
+{% block inhoud %}
+<form method="post" action="/admin/login" class="kaart">
+  {% if error %}<p class="melding fout">{{ error }}</p>{% endif %}
+  <label for="ww">Wachtwoord</label>
+  <input id="ww" type="password" name="wachtwoord" autocomplete="current-password" autofocus>
+  <p></p>
+  <button class="knop groot" type="submit">Inloggen</button>
+</form>
+{% endblock %}

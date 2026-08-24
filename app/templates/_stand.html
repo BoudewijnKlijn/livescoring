@@ -1,0 +1,7 @@
+{#- Totaal en aantal verschillen van één kaart. -#}
+Totaal <strong>{{ card.total }}</strong> · {{ card.thru }}/18 holes
+{% if card.conflicts %}
+  <span class="pil rood">{{ card.conflicts|length }} verschil{{ '' if card.conflicts|length == 1 else 'len' }}: hole {{ card.conflicts|join(', ') }}</span>
+{% elif card.complete %}
+  <span class="pil groen">compleet</span>
+{% endif %}

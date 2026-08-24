@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Live · {{ competition.name }}{% endblock %}
+{% block kop %}{{ competition.name }}{% endblock %}
+{% block subkop %}Live overzicht · ververst elke 5 seconden{% endblock %}
+{% block headeractie %}<a class="knop secundair" href="/admin/c/{{ competition.id }}">Beheer</a>{% endblock %}
+
+{% macro spelerkeuze(naam) %}
+<select name="{{ naam }}" required>
+  <option value="">Kies speler…</option>
+  {% for f in flights %}
+    {% for entry, card in f.cards %}
+      <option value="{{ entry.id }}">R{{ f.round.no }} · {{ f.flight.name }} · {{ entry.player.name }}</option>
+    {% endfor %}
+  {% endfor %}
+</select>
+{% endmacro %}
+
+{% block inhoud %}
+<div hx-get="/admin/c/{{ competition.id }}/live/table" hx-trigger="every 5s" hx-swap="innerHTML">
+  {% include "_admin_live_table.html" %}
+</div>
+
+<div class="kaart">
+  <h2>Score corrigeren</h2>
+  <p class="klein">Overschrijft beide invoeren van die hole, ook als de kaart getekend is.
+    De reden komt in de audit log.</p>
+  <form method="post" action="/admin/entry/0/score" onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/score'">
+    {{ spelerkeuze('entry_kiezer') }}
+    <div class="rij">
+      <span><label for="hole">Hole</label>
+        <input id="hole" type="number" name="hole" min="1" max="18" required style="width:6rem"></span>
+      <span><label for="strokes">Slagen</label>
+        <input id="strokes" type="number" name="strokes" min="1" max="20" style="width:6rem"></span>
+    </div>
+    <label for="reden">Reden (verplicht)</label>
+    <input id="reden" type="text" name="reden" required>
+    <p></p>
+    <button class="knop" type="submit">Corrigeren</button>
+  </form>
+</div>
+
+<div class="kaart">
+  <h2>Status wijzigen</h2>
+  <p class="klein">DQ, NR of WD halen een speler uit de rangschikking.</p>
+  <form method="post" action="/admin/entry/0/status" onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/status'">
+    {{ spelerkeuze('entry_kiezer') }}
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      <option value="ok">ok — speelt</option>
+      <option value="dq">dq — gediskwalificeerd</option>
+      <option value="nr">nr — no return</option>
+      <option value="wd">wd — teruggetrokken</option>
+    </select>
+    <label for="reden2">Reden</label>
+    <input id="reden2" type="text" name="reden">
+    <p></p>
+    <button class="knop" type="submit">Status opslaan</button>
+  </form>
+</div>
+
+<div class="kaart">
+  <h2>Kaart ontgrendelen</h2>
+  <p class="klein">Maakt een getekende kaart weer bewerkbaar voor de speler.</p>
+  <form method="post" action="/admin/entry/0/unlock" onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/unlock'">
+    {{ spelerkeuze('entry_kiezer') }}
+    <label for="reden3">Reden</label>
+    <input id="reden3" type="text" name="reden">
+    <p></p>
+    <button class="knop secundair" type="submit">Ontgrendelen</button>
+  </form>
+</div>
+
+<div class="kaart">
+  <h2>Kaart leegmaken</h2>
+  <p class="melding fout">Wist alle scores van die speler in die ronde. Niet terug te draaien.</p>
+  <form method="post" action="/admin/entry/0/reset" onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/reset'">
+    {{ spelerkeuze('entry_kiezer') }}
+    <input type="hidden" name="verwacht" value="{{ code }}">
+    <label>Typ ter bevestiging: <strong>{{ code }}</strong></label>
+    <input type="text" name="code" autocapitalize="characters" style="max-width:8rem">
+    <label for="reden4">Reden</label>
+    <input id="reden4" type="text" name="reden">
+    <p></p>
+    <button class="knop gevaar" type="submit">Kaart leegmaken</button>
+  </form>
+</div>
+{% endblock %}

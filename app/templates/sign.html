@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Kaart tekenen{% endblock %}
+{% block kop %}Kaart tekenen{% endblock %}
+{% block subkop %}{{ entry.player.name }} · ronde {{ entry.round.no }}{% endblock %}
+{% block headeractie %}<a class="knop secundair" href="/me/card">Terug</a>{% endblock %}
+{% block inhoud %}
+
+{% if error %}<p class="melding fout">{{ error }}</p>{% endif %}
+
+{% if entry.locked %}
+  <p class="melding goed">Getekend op
+    {{ entry.signed_at.strftime('%d-%m-%Y %H:%M') }}. Totaal {{ card.total }} slagen.</p>
+{% else %}
+
+<div class="kaart">
+  <h2>Totaal: {{ card.total }} slagen</h2>
+  <p class="klein">{{ card.thru }} van 18 holes ingevuld · {{ card.to_par }} ten opzichte van par</p>
+</div>
+
+{% if card.conflicts %}
+  <p class="melding fout">Verschil op hole {{ card.conflicts|join(', ') }}.
+  Jij en je marker moeten het eerst eens worden.</p>
+{% endif %}
+{% if card.missing_self %}
+  <p class="melding let-op">Jij hebt nog geen score op hole {{ card.missing_self|join(', ') }}.</p>
+{% endif %}
+{% if card.missing_marker %}
+  <p class="melding let-op">Je marker heeft nog geen score op hole {{ card.missing_marker|join(', ') }}.</p>
+{% endif %}
+
+<form method="post" action="/me/sign" class="kaart">
+  <label class="rij" style="font-weight:600">
+    <input type="checkbox" name="akkoord" value="ja" style="width:28px;height:28px;min-height:28px">
+    <span>Ik verklaar dat deze scores juist zijn</span>
+  </label>
+  <p class="klein">Na tekenen is de kaart vergrendeld. Alleen de wedstrijdleiding kan hem nog openen.</p>
+  <button class="knop groot" type="submit" {% if not card.signable %}disabled{% endif %}>
+    {% if card.signable %}Tekenen{% else %}Nog niet compleet{% endif %}
+  </button>
+</form>
+{% endif %}
+{% endblock %}

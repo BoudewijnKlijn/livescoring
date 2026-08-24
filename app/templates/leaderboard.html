@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ competition.name }}{% endblock %}
+{% block kop %}{{ competition.name }}{% endblock %}
+{% block subkop %}Live stand · ververst automatisch{% endblock %}
+{% block inhoud %}
+<div id="stand" hx-get="/l/{{ competition.leaderboard_slug }}/table"
+     hx-trigger="every 5s" hx-swap="innerHTML">
+  {% include "_leaderboard_table.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{#- De tabel van het leaderboard, apart zodat HTMX alleen dit ververst. -#}
+<table class="lijst">
+  <tr>
+    <th>#</th>
+    <th>Speler</th>
+    {% if competition.rounds|length > 1 %}
+      {% for r in competition.rounds %}<th class="getal">R{{ r.no }}</th>{% endfor %}
+    {% endif %}
+    <th class="getal">Holes</th>
+    <th class="getal">Totaal</th>
+    <th class="getal">+/-</th>
+  </tr>
+  {% for row in rows %}
+  <tr class="{% if not row.playing %}uitgevallen{% elif row.done %}klaar{% endif %}">
+    <td>{{ loop.index if row.playing else '' }}</td>
+    <td>
+      {{ row.name }}
+      {% if not row.playing %}<span class="pil rood">{{ row.status|upper }}</span>{% endif %}
+      {% if row.conflicts %}<span class="pil rood">verschil</span>{% endif %}
+    </td>
+    {% if competition.rounds|length > 1 %}
+      {% for r in competition.rounds %}
+        <td class="getal">{{ row.round_totals.get(r.no, '') or '' }}</td>
+      {% endfor %}
+    {% endif %}
+    <td class="getal">{{ row.thru }}</td>
+    <td class="getal"><strong>{{ row.total }}</strong></td>
+    <td class="getal">{% if row.thru %}{{ '%+d'|format(row.to_par) if row.to_par else 'par' }}{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6">Nog geen deelnemers.</td></tr>
+  {% endfor %}
+</table>
+<p class="klein">Gesorteerd op slagen ten opzichte van par over de gespeelde holes.
+Bijgewerkt om {{ bijgewerkt }}.</p>

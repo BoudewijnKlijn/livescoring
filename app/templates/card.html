@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Scores invoeren{% endblock %}
+{% block kop %}Scores{% endblock %}
+{% block subkop %}Ronde {{ entry.round.no }} · flight {{ entry.flight.name }} · start hole {{ entry.flight.start_hole }}{% endblock %}
+{% block headeractie %}<a class="knop secundair" href="/me">Terug</a>{% endblock %}
+
+{% macro kaarttabel(kaart, doel, bron, label) %}
+<div class="stand" id="stand-{{ doel.id }}">{% with card = kaart %}{% include "_stand.html" %}{% endwith %}</div>
+<div class="scroller" data-scroll-naar="{{ kaart.first_open_hole() }}">
+  <table class="kaarttabel">
+    <tr class="holes">
+      <th class="kop">Hole</th>
+      {% for r in kaart.rows %}<th id="hole-{{ doel.id }}-{{ r.hole }}">{{ r.hole }}</th>{% endfor %}
+    </tr>
+    <tr class="par">
+      <th class="kop">Par</th>
+      {% for r in kaart.rows %}<td>{{ r.par }}</td>{% endfor %}
+    </tr>
+    <tr>
+      <th class="kop">{{ label }}</th>
+      {% for r in kaart.rows %}
+        {% with row = r, entry = doel, source = bron, card = kaart, error = None %}
+          {% include "_cel_kaal.html" %}
+        {% endwith %}
+      {% endfor %}
+    </tr>
+  </table>
+</div>
+{% endmacro %}
+
+{% block inhoud %}
+{% if entry.locked %}
+  <p class="melding goed">Je kaart is getekend en vergrendeld. Wijzigen kan alleen via de wedstrijdleiding.</p>
+{% endif %}
+
+<h2>Jouw scores</h2>
+{{ kaarttabel(card, entry, 'self', 'Ik') }}
+
+{% for doel, doelkaart in marked %}
+  <h2>{{ doel.player.name }} <span class="klein">(jij bent marker)</span></h2>
+  {{ kaarttabel(doelkaart, doel, 'marker', 'Ik noteer') }}
+{% endfor %}
+
+<p class="klein">Een klein getal rechtsboven in een vakje is wat de ander invulde. Rood = verschil.
+Overleg samen en pas ieder je eigen invoer aan.</p>
+
+{% if not entry.locked %}<a class="knop groot" href="/me/sign">Klaar? Kaart tekenen</a>{% endif %}
+
+<script>
+document.querySelectorAll('.scroller[data-scroll-naar]').forEach(function (s) {
+  var hole = s.getAttribute('data-scroll-naar');
+  var kop = s.querySelector('tr.holes th:nth-child(' + (parseInt(hole, 10) + 1) + ')');
+  if (kop) { s.scrollLeft = Math.max(0, kop.offsetLeft - 110); }
+});
+document.body.addEventListener('htmx:beforeRequest', function (e) {
+  var cel = e.target.closest('td.cel'); if (cel) { cel.classList.add('bezig'); }
+});
+document.body.addEventListener('htmx:afterRequest', function (e) {
+  var cel = e.target.closest('td.cel'); if (cel) { cel.classList.remove('bezig'); }
+  if (!e.detail.successful) {
+    var doel = e.target.closest('td.cel');
+    if (doel) { doel.classList.add('mislukt'); doel.title = 'Niet opgeslagen. Typ het nog eens.'; }
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ competition.name }}{% endblock %}
+{% block kop %}{{ competition.name }}{% endblock %}
+{% block subkop %}Beheer{% endblock %}
+{% block headeractie %}<a class="knop secundair" href="/admin">Alle wedstrijden</a>{% endblock %}
+{% block inhoud %}
+
+{% if errors %}
+<div class="kaart">
+  <p class="melding fout">De import is niet uitgevoerd. Er is niets gewijzigd.</p>
+  <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="kaart">
+  <h2>Spelers importeren</h2>
+  <p class="klein">Eén regel per speler per ronde. Kolommen:
+    <code>naam,email,ronde,flight,starthole,marker</code>. Starthole is 1 of 10.
+    Herimporteren voegt toe en werkt flights bij, maar verwijdert nooit scores.</p>
+  <form method="post" action="/admin/c/{{ competition.id }}/import">
+    <textarea name="csv_tekst" placeholder="naam,email,ronde,flight,starthole,marker&#10;Jan de Vries,jan@x.nl,1,A,1,Piet Bakker&#10;Piet Bakker,piet@x.nl,1,A,1,Jan de Vries">{{ csv_tekst or '' }}</textarea>
+    <p></p>
+    <button class="knop groot" type="submit">Importeren</button>
+  </form>
+</div>
+
+<div class="kaart">
+  <h2>Leaderboard</h2>
+  <p class="klein">Deel deze link met toeschouwers. Hij is openbaar voor wie hem heeft.</p>
+  <input type="text" readonly value="{{ base_url }}/l/{{ competition.leaderboard_slug }}"
+         onclick="this.select()">
+</div>
+
+{% for r in competition.rounds %}
+<div class="kaart">
+  <h2>Ronde {{ r.no }}</h2>
+  <p class="klein">{{ r.flights|length }} flights · {{ r.entries|length }} deelnames</p>
+  <form method="post" action="/admin/round/{{ r.id }}/pars">
+    <label for="pars{{ r.id }}">Pars van hole 1 t/m 18</label>
+    <input id="pars{{ r.id }}" type="text" name="pars" value="{{ r.pars|join(',') }}">
+    <p></p>
+    <button class="knop secundair" type="submit">Pars opslaan</button>
+  </form>
+</div>
+{% endfor %}
+
+<div class="kaart">
+  <h2>Nieuwe links maken</h2>
+  <p class="klein">Vervangt de links van alle spelers in deze wedstrijd. Oude links werken
+    daarna niet meer. <strong>Scores blijven staan.</strong> Gebruik dit ook als je de
+    linkenlijst kwijt bent.</p>
+  <form method="post" action="/admin/c/{{ competition.id }}/rotate">
+    <input type="hidden" name="scope" value="competition">
+    <input type="hidden" name="verwacht" value="{{ code }}">
+    <label>Typ ter bevestiging: <strong>{{ code }}</strong></label>
+    <input type="text" name="code" autocapitalize="characters" style="max-width:8rem">
+    <p></p>
+    <button class="knop gevaar" type="submit">Alle links vervangen</button>
+  </form>
+</div>
+
+<div class="kaart">
+  <h2>Export</h2>
+  <div class="rij">
+    <a class="knop secundair" href="/admin/c/{{ competition.id }}/export.csv">Uitslag CSV</a>
+    <a class="knop secundair" href="/admin/c/{{ competition.id }}/audit.csv">Audit log CSV</a>
+  </div>
+</div>
+{% endblock %}
