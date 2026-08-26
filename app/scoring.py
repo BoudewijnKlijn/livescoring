@@ -11,7 +11,16 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import HOLES, AuditLog, Competition, Entry, HoleScore, Round, now
+from app.models import (
+    DEFAULT_PARS,
+    HOLES,
+    AuditLog,
+    Competition,
+    Entry,
+    HoleScore,
+    Round,
+    now,
+)
 
 
 class ScoreError(Exception):
@@ -151,7 +160,7 @@ class Card:
 
 def build_card(entry: Entry) -> Card:
     """Bouw de kaart van een entry uit zijn scores."""
-    pars = entry.round.pars or [4] * HOLES
+    pars = entry.round.pars or DEFAULT_PARS
     found = scores_of(entry)
     rows = [
         HoleRow(

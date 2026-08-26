@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from app.models import Entry, Player
+from app.models import DEFAULT_PARS, HOLES, Entry, Player
 from app.scoring import build_card
 
 
@@ -184,9 +184,9 @@ def test_leaderboard_toont_alleen_scores_waar_beiden_het_eens_zijn(db, wedstrijd
     db.expire_all()
     rijen = {r.name: r for r in leaderboard(db, competition)}
 
-    assert rijen["Jan"].holes[0] == (3, "birdie")   # par 4, dus birdie
+    assert rijen["Jan"].holes[0] == (3, "eagle")    # hole 1 is een par 5
     assert rijen["Jan"].holes[1] == (None, "")      # verschil: niet tonen
-    assert rijen["Jan"].to_par == -1
+    assert rijen["Jan"].to_par == -2
     assert rijen["Jan"].thru == 1
     assert rijen["Jan"].total is None               # ronde loopt nog
     assert "Anne" not in rijen                      # nog niet gestart
@@ -223,3 +223,10 @@ def test_geweigerde_eerste_score_geeft_leeg_vakje_terug(db, wedstrijd, als_spele
 
     assert geweigerd.status_code == 422
     assert 'value=""' in geweigerd.text
+
+
+def test_nieuwe_ronde_krijgt_de_pars_van_de_baan(db, wedstrijd):
+    """Een geïmporteerde ronde staat meteen op de pars van de thuisbaan."""
+    assert _entry_van(db, "Jan").round.pars == DEFAULT_PARS
+    assert sum(DEFAULT_PARS) == 72
+    assert len(DEFAULT_PARS) == HOLES

@@ -27,6 +27,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from app.config import settings
 
 HOLES = 18
+# Pars van de thuisbaan. Per ronde aan te passen op het beheerscherm.
+DEFAULT_PARS = [5, 4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 3, 4, 4, 4, 4, 3, 5]
 SOURCES = ("self", "marker")
 ENTRY_STATUSES = ("ok", "dq", "nr", "wd")
 
@@ -89,7 +91,7 @@ class Round(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     competition_id: Mapped[int] = mapped_column(ForeignKey("competition.id", ondelete="CASCADE"))
     no: Mapped[int] = mapped_column(Integer)
-    pars: Mapped[list[int]] = mapped_column(JSON, default=lambda: [4] * HOLES)
+    pars: Mapped[list[int]] = mapped_column(JSON, default=lambda: list(DEFAULT_PARS))
 
     competition: Mapped[Competition] = relationship(back_populates="rounds")
     flights: Mapped[list[Flight]] = relationship(

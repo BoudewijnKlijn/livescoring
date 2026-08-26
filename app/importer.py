@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import new_token
-from app.models import HOLES, Competition, Entry, Flight, Player, Round
+from app.models import DEFAULT_PARS, Competition, Entry, Flight, Player, Round
 from app.scoring import log
 
 COLUMNS = ("naam", "email", "ronde", "flight", "starthole", "marker")
@@ -182,7 +182,7 @@ def import_csv(db: Session, competition: Competition, text: str) -> ImportResult
 
         rnd = rounds.get(row.round_no)
         if rnd is None:
-            rnd = Round(competition_id=competition.id, no=row.round_no, pars=[4] * HOLES)
+            rnd = Round(competition_id=competition.id, no=row.round_no, pars=list(DEFAULT_PARS))
             db.add(rnd)
             db.flush()
             rounds[row.round_no] = rnd

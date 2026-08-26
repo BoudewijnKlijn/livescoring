@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.admin import router as admin_router
 from app.auth import AppError, CurrentEntry, DbSession, Unauthorized, hash_token, login_player
-from app.models import Competition, Entry, create_all
+from app.models import DEFAULT_PARS, Competition, Entry, create_all
 from app.scoring import ScoreError, build_card, leaderboard, set_score, sign_card
 
 templates = Jinja2Templates(directory="app/templates")
@@ -197,7 +197,7 @@ def _blader(rijen: list, per_scherm: int) -> tuple[list, int, int]:
 
 def _pars(competition: Competition) -> list[int]:
     """De pars van de baan, voor de parregel boven het leaderboard."""
-    return competition.rounds[0].pars if competition.rounds else [4] * 18
+    return competition.rounds[0].pars if competition.rounds else DEFAULT_PARS
 
 
 def _competition(db: DbSession, slug: str) -> Competition:
