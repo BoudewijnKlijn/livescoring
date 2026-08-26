@@ -176,3 +176,32 @@ def test_links_zijn_tabgescheiden_voor_excel(db, wedstrijd, client):
     assert antwoord.status_code == 200
     assert "Naam\tRonde\tLink" in antwoord.text
     assert re.search(r"Nieuw Een\t2\thttp\S+/t/\S+", antwoord.text)
+
+
+def test_wedstrijd_verbergen_en_terugzetten(db, wedstrijd, client):
+    """Verbergen haalt een wedstrijd uit de lijst zonder iets te verwijderen."""
+    competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+
+    client.post(f"/admin/c/{competition.id}/verbergen", follow_redirects=False)
+
+    db.expire_all()
+    verborgen = db.get(Competition, competition.id)
+    assert verborgen.status == "closed"
+    assert verborgen.players != [], "de gegevens blijven staan"
+    overzicht = client.get("/admin").text
+    assert "verborgen wedstrijd" in overzicht
+
+    client.post(f"/admin/c/{competition.id}/verbergen", data={"terug": "ja"})
+
+    db.expire_all()
+    assert db.get(Competition, competition.id).status == "live"
+
+
+def test_verborgen_wedstrijd_houdt_werkend_leaderboard(db, wedstrijd, client):
+    """De leaderboardlink blijft werken; verbergen is alleen opruimen in het admingedeelte."""
+    competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    client.post(f"/admin/c/{competition.id}/verbergen")
+
+    assert client.get(f"/l/{competition.leaderboard_slug}").status_code == 200

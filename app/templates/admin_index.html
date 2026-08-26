@@ -2,27 +2,43 @@
 {% block title %}Wedstrijden{% endblock %}
 {% block kop %}Wedstrijden{% endblock %}
 {% block headeractie %}
-<form method="post" action="/admin/logout"><button class="secundair knop">Uitloggen</button></form>
+<form method="post" action="/admin/logout"><button class="knop secundair">Uitloggen</button></form>
 {% endblock %}
-{% block inhoud %}
-<div class="kaart">
-  <h2>Nieuwe wedstrijd</h2>
-  <form method="post" action="/admin/competition" class="rij">
-    <input type="text" name="naam" placeholder="Clubkampioenschap 2026" style="flex:1;min-width:200px">
-    <button class="knop" type="submit">Aanmaken</button>
-  </form>
-</div>
 
-{% for c in competitions %}
-<div class="kaart">
-  <h2>{{ c.name }}</h2>
-  <p class="klein">{{ c.rounds|length }} ronde(n) · status {{ c.status }}</p>
+{% macro regel(c, verborgen=false) %}
+<li class="wedstrijd">
+  <div class="wedstrijd-naam">
+    {{ c.name }}
+    <span class="klein">{{ c.rounds|length }} ronde{{ '' if c.rounds|length == 1 else 'n' }}
+      · {{ c.players|length }} speler{{ '' if c.players|length == 1 else 's' }}</span>
+  </div>
   <div class="rij">
     <a class="knop" href="/admin/c/{{ c.id }}">Beheren</a>
     <a class="knop secundair" href="/l/{{ c.leaderboard_slug }}">Leaderboard</a>
+    <form method="post" action="/admin/c/{{ c.id }}/verbergen">
+      {% if verborgen %}<input type="hidden" name="terug" value="ja">{% endif %}
+      <button class="knop plat" type="submit">{{ 'Terugzetten' if verborgen else 'Verbergen' }}</button>
+    </form>
   </div>
-</div>
+</li>
+{% endmacro %}
+
+{% block inhoud %}
+<form method="post" action="/admin/competition" class="rij nieuw">
+  <input type="text" name="naam" placeholder="Naam van de wedstrijd" required>
+  <button class="knop" type="submit">Aanmaken</button>
+</form>
+
+{% if actief %}
+<ul class="wedstrijden">{% for c in actief %}{{ regel(c) }}{% endfor %}</ul>
 {% else %}
-<p>Nog geen wedstrijden.</p>
-{% endfor %}
+<p class="klein">Nog geen wedstrijden. Maak er hierboven een aan.</p>
+{% endif %}
+
+{% if verborgen %}
+<details class="verborgen-blok">
+  <summary>{{ verborgen|length }} verborgen wedstrijd{{ '' if verborgen|length == 1 else 'en' }}</summary>
+  <ul class="wedstrijden">{% for c in verborgen %}{{ regel(c, true) }}{% endfor %}</ul>
+</details>
+{% endif %}
 {% endblock %}

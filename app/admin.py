@@ -86,11 +86,26 @@ def do_logout() -> Response:
 
 @router.get("", response_class=HTMLResponse)
 def index(request: Request, db: DbSession, _: AdminOnly) -> HTMLResponse:
-    """Overzicht van alle competities."""
-    competitions = db.scalars(select(Competition).order_by(Competition.created_at.desc())).all()
+    """Overzicht van alle wedstrijden, met de verborgen wedstrijden apart."""
+    alle = db.scalars(select(Competition).order_by(Competition.created_at.desc())).all()
     return templates.TemplateResponse(
-        request, "admin_index.html", {"competitions": competitions}
+        request,
+        "admin_index.html",
+        {
+            "actief": [c for c in alle if c.status != "closed"],
+            "verborgen": [c for c in alle if c.status == "closed"],
+        },
     )
+
+
+@router.post("/c/{competition_id}/verbergen")
+def verbergen(competition_id: int, db: DbSession, _: AdminOnly, terug: str = Form("")) -> Response:
+    """Zet een wedstrijd op verborgen of weer terug. Er wordt niets verwijderd."""
+    competition = _get_competition(db, competition_id)
+    competition.status = "live" if terug else "closed"
+    log(db, "admin", "verbergen", competition=competition.id, status=competition.status)
+    db.commit()
+    return RedirectResponse("/admin", status_code=303)
 
 
 @router.post("/competition")
