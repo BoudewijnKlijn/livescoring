@@ -205,3 +205,66 @@ def test_verborgen_wedstrijd_houdt_werkend_leaderboard(db, wedstrijd, client):
     client.post(f"/admin/c/{competition.id}/verbergen")
 
     assert client.get(f"/l/{competition.leaderboard_slug}").status_code == 200
+
+
+def test_nieuwe_link_voor_een_speler_laat_de_rest_werken(db, wedstrijd, client):
+    """Eén speler krijgt een nieuwe link; de anderen houden hun oude link en hun scores."""
+    competition, tokens = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    jan = _entry_van(db, "Jan")
+    pagina = client.get(f"/admin/c/{competition.id}").text
+    code = re.search(r'name="verwacht" value="([A-Z]{4})"', pagina).group(1)
+
+    antwoord = client.post(
+        f"/admin/c/{competition.id}/rotate",
+        data={"scope": "entry", "entry_id": jan.id, "verwacht": code, "code": code},
+    )
+
+    assert antwoord.status_code == 200
+    nieuw = re.search(r"/t/([A-Za-z0-9_-]{20,})", antwoord.text).group(1)
+    assert nieuw != tokens["Jan"]
+
+    client.cookies.clear()
+    assert client.get(f"/t/{tokens['Jan']}", follow_redirects=False).status_code == 401
+    assert client.get(f"/t/{nieuw}", follow_redirects=False).status_code == 303
+    client.cookies.clear()
+    assert client.get(f"/t/{tokens['Piet']}", follow_redirects=False).status_code == 303
+
+
+def test_nieuwe_link_vraagt_altijd_om_de_code(db, wedstrijd, client):
+    """Zonder de juiste code verandert er niets aan de link."""
+    competition, tokens = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    jan = _entry_van(db, "Jan")
+
+    antwoord = client.post(
+        f"/admin/c/{competition.id}/rotate",
+        data={"scope": "entry", "entry_id": jan.id, "verwacht": "ABCD", "code": "ZZZZ"},
+    )
+
+    assert antwoord.status_code == 400
+    client.cookies.clear()
+    assert client.get(f"/t/{tokens['Jan']}", follow_redirects=False).status_code == 303
+
+
+def test_lege_spelerkeuze_vervangt_niet_stilzwijgend_alle_links(db, wedstrijd, client):
+    """Zonder gekozen speler gebeurt er niets.
+
+    Viel dit terug op de hele competitie, dan raakt iedereen zijn link kwijt omdat er één
+    speler geholpen moest worden.
+    """
+    competition, tokens = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    pagina = client.get(f"/admin/c/{competition.id}").text
+    code = re.search(r'name="verwacht" value="([A-Z]{4})"', pagina).group(1)
+
+    antwoord = client.post(
+        f"/admin/c/{competition.id}/rotate",
+        data={"scope": "entry", "entry_id": "", "verwacht": code, "code": code},
+    )
+
+    assert antwoord.status_code == 400
+    client.cookies.clear()
+    for naam in ("Jan", "Piet", "Anne", "Kees"):
+        assert client.get(f"/t/{tokens[naam]}", follow_redirects=False).status_code == 303
+        client.cookies.clear()

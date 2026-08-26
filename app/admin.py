@@ -301,25 +301,31 @@ def rotate_scope(
 ) -> HTMLResponse:
     """Maak nieuwe links voor een speler, een flight of de hele competitie."""
     competition = _get_competition(db, competition_id)
-    if scope == "entry" and entry_id:
+    # Elke keuze wijst zichzelf aan. Een lege keuze is een fout, nooit stilzwijgend
+    # "dan maar iedereen": dat kost negenendertig spelers hun link om er één te helpen.
+    if scope == "entry":
+        if not entry_id:
+            raise AppError("Kies eerst een speler. Er is niets gewijzigd.", 400)
         entries = [db.get(Entry, int(entry_id))]
-    elif scope == "flight" and flight_id:
+    elif scope == "flight":
+        if not flight_id:
+            raise AppError("Kies eerst een flight. Er is niets gewijzigd.", 400)
         flight = db.get(Flight, int(flight_id))
         entries = list(flight.entries) if flight else []
-    else:
+    elif scope == "competition":
         entries = [
             e
             for rnd in competition.rounds
             for e in db.scalars(select(Entry).where(Entry.round_id == rnd.id))
         ]
+    else:
+        raise AppError("Onbekende keuze. Er is niets gewijzigd.", 400)
     entries = [e for e in entries if e is not None]
-    heeft_scores = any(e.scores for e in entries)
-    if heeft_scores:
-        _check_code(code, verwacht)
+    _check_code(code, verwacht)
     links = _rotate(db, entries)
     note = (
-        f"{len(links)} nieuwe links gemaakt. De oude links werken niet meer. "
-        "Scores zijn ongewijzigd. Kopieer de links nu."
+        f"{len(links)} nieuwe link(s) gemaakt. De vorige link van deze speler(s) werkt niet "
+        "meer; die van de anderen blijft gewoon werken. Scores zijn ongewijzigd."
     )
     return _links_page(request, competition, links, note)
 

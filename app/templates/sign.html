@@ -13,8 +13,9 @@
 {% else %}
 
 <div class="kaart">
-  <h2>Totaal: {{ card.total }} slagen</h2>
-  <p class="klein">{{ card.thru }} van 18 holes ingevuld · {{ card.to_par }} ten opzichte van par</p>
+  <div class="totaal">{{ card.total }} <span class="eenheid">slagen</span></div>
+  <p class="klein">{{ card.thru }} van 18 holes ingevuld ·
+    {{ '%+d'|format(card.to_par) if card.to_par else 'gelijk aan' }} par</p>
 </div>
 
 {% if card.conflicts %}
