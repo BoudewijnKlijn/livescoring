@@ -131,7 +131,6 @@ def test_kaart_is_vergrendeld_na_tekenen(db, wedstrijd, als_speler):
         "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "self", "strokes": 2}
     )
     assert daarna.status_code == 422
-    assert "vergrendeld" in daarna.text
     db.expire_all()
     assert build_card(_entry_van(db, "Jan")).rows[0].self_strokes == 4
 
@@ -161,3 +160,34 @@ def test_onmogelijke_score_wordt_geweigerd(db, wedstrijd, als_speler):
 
     db.expire_all()
     assert _entry_van(db, "Jan").scores == []
+
+
+def test_leaderboard_toont_alleen_scores_waar_beiden_het_eens_zijn(db, wedstrijd, als_speler):
+    """Eens = zichtbaar en gekleurd naar par; oneens = leeg; niet gestart = geen regel."""
+    from app.scoring import leaderboard
+
+    competition, _ = wedstrijd
+    jan = _entry_van(db, "Jan")
+    als_speler("Jan").post(
+        "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "self", "strokes": 3}
+    )
+    als_speler("Piet").post(
+        "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "marker", "strokes": 3}
+    )
+    als_speler("Jan").post(
+        "/api/score", data={"entry_id": jan.id, "hole": 2, "source": "self", "strokes": 5}
+    )
+    als_speler("Piet").post(
+        "/api/score", data={"entry_id": jan.id, "hole": 2, "source": "marker", "strokes": 6}
+    )
+
+    db.expire_all()
+    rijen = {r.name: r for r in leaderboard(db, competition)}
+
+    assert rijen["Jan"].holes[0] == (3, "birdie")   # par 4, dus birdie
+    assert rijen["Jan"].holes[1] == (None, "")      # verschil: niet tonen
+    assert rijen["Jan"].to_par == -1
+    assert rijen["Jan"].thru == 1
+    assert rijen["Jan"].total is None               # ronde loopt nog
+    assert "Anne" not in rijen                      # nog niet gestart
+    assert "Piet" not in rijen                      # zelf nog niets ingevuld

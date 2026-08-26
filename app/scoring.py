@@ -49,6 +49,11 @@ class HoleRow:
         )
 
     @property
+    def agreed_strokes(self) -> int | None:
+        """De score, maar alleen als speler en marker hetzelfde invulden."""
+        return self.self_strokes if self.agreed else None
+
+    @property
     def agreed(self) -> bool:
         """Beide bronnen ingevuld en gelijk."""
         return (
@@ -95,6 +100,35 @@ class Card:
         return sum(
             r.self_strokes - r.par for r in self.rows if r.self_strokes is not None
         )
+
+    @property
+    def started(self) -> bool:
+        """Is er op deze kaart al iets ingevuld, door wie dan ook?"""
+        return any(
+            r.self_strokes is not None or r.marker_strokes is not None for r in self.rows
+        )
+
+    @property
+    def agreed_thru(self) -> int:
+        """Aantal holes waarover speler en marker het eens zijn."""
+        return sum(1 for r in self.rows if r.agreed)
+
+    @property
+    def agreed_total(self) -> int:
+        """Totaal over de holes waarover overeenstemming is."""
+        return sum(r.agreed_strokes for r in self.rows if r.agreed)
+
+    @property
+    def agreed_to_par(self) -> int:
+        """Ten opzichte van par, over de holes waarover overeenstemming is."""
+        return sum(r.agreed_strokes - r.par for r in self.rows if r.agreed)
+
+    def nine(self, eerste: int, laatste: int) -> int | None:
+        """Totaal van een negen, of None zolang er nog een hole open of betwist is."""
+        rows = [r for r in self.rows if eerste <= r.hole <= laatste]
+        if not all(r.agreed for r in rows):
+            return None
+        return sum(r.agreed_strokes for r in rows)
 
     @property
     def complete(self) -> bool:
@@ -204,72 +238,73 @@ def log(db: Session, actor: str, action: str, **detail) -> None:
     db.add(AuditLog(actor=actor, action=action, detail=detail))
 
 
+def par_klasse(strokes: int | None, par: int) -> str:
+    """CSS-klasse van een score ten opzichte van par."""
+    if strokes is None:
+        return ""
+    verschil = strokes - par
+    if verschil <= -2:
+        return "eagle"
+    if verschil == -1:
+        return "birdie"
+    if verschil == 0:
+        return "par"
+    if verschil == 1:
+        return "bogey"
+    return "dubbel"
+
+
 @dataclass
 class LeaderboardRow:
-    """Eén speler op het leaderboard, opgeteld over alle ronden."""
+    """Eén speler in één ronde op het leaderboard."""
 
-    player_id: int
     name: str
+    round_no: int
     status: str
-    round_totals: dict[int, int]
-    thru: int
-    total: int
+    holes: list[tuple[int | None, str]]
     to_par: int
-    conflicts: int
-    signed_rounds: int
-    round_count: int
+    thru: int
+    out: int | None
+    back: int | None
+    total: int | None
 
     @property
     def playing(self) -> bool:
         """Telt deze speler mee in de rangschikking?"""
         return self.status == "ok"
 
-    @property
-    def done(self) -> bool:
-        """Alle ronden getekend."""
-        return self.signed_rounds == self.round_count
-
 
 def leaderboard(db: Session, competition: Competition) -> list[LeaderboardRow]:
-    """Stand van een competitie, opgeteld over de ronden.
+    """Stand van een competitie, per speler per ronde.
 
-    Gesorteerd op slagen ten opzichte van par: bij een live stand is het totaal aantal
-    slagen alleen zinnig als iedereen even ver is, en dat is tijdens de ronde nooit zo.
-    Spelers met DQ, NR of WD staan onderaan.
+    Een hole telt pas mee als speler en marker dezelfde score invulden. Zolang een ronde
+    loopt staat er geen totaal, alleen de stand ten opzichte van par. Spelers die nog geen
+    enkele score hebben ingevuld staan er niet bij.
     """
+    rows: list[LeaderboardRow] = []
     rounds = db.scalars(
         select(Round).where(Round.competition_id == competition.id).order_by(Round.no)
     ).all()
-    round_count = len(rounds)
-    entries = db.scalars(
-        select(Entry).where(Entry.round_id.in_([r.id for r in rounds] or [0]))
-    ).all()
-
-    by_player: dict[int, list[Entry]] = {}
-    for entry in entries:
-        by_player.setdefault(entry.player_id, []).append(entry)
-
-    rows: list[LeaderboardRow] = []
-    for player_id, player_entries in by_player.items():
-        cards = [build_card(e) for e in player_entries]
-        status = next((e.status for e in player_entries if e.status != "ok"), "ok")
-        rows.append(
-            LeaderboardRow(
-                player_id=player_id,
-                name=player_entries[0].player.name,
-                status=status,
-                round_totals={
-                    e.round.no: c.total
-                    for e, c in zip(player_entries, cards, strict=True)
-                },
-                thru=sum(c.thru for c in cards),
-                total=sum(c.total for c in cards),
-                to_par=sum(c.to_par for c in cards),
-                conflicts=sum(len(c.conflicts) for c in cards),
-                signed_rounds=sum(1 for e in player_entries if e.signed_at),
-                round_count=round_count,
+    for rnd in rounds:
+        for entry in db.scalars(select(Entry).where(Entry.round_id == rnd.id)):
+            card = build_card(entry)
+            if not card.started:
+                continue
+            rows.append(
+                LeaderboardRow(
+                    name=entry.player.name,
+                    round_no=rnd.no,
+                    status=entry.status,
+                    holes=[
+                        (r.agreed_strokes, par_klasse(r.agreed_strokes, r.par))
+                        for r in card.rows
+                    ],
+                    to_par=card.agreed_to_par,
+                    thru=card.agreed_thru,
+                    out=card.nine(1, 9),
+                    back=card.nine(10, HOLES),
+                    total=card.agreed_total if card.agreed_thru == HOLES else None,
+                )
             )
-        )
-
     rows.sort(key=lambda r: (not r.playing, r.to_par, -r.thru, r.name))
     return rows

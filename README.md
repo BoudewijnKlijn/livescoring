@@ -8,12 +8,20 @@ lossen verschillen op en tekenen hun kaart. Toeschouwers volgen de stand live.
 
 ```bash
 docker compose up -d                          # Postgres op poort 5434
-cp .env.example .env                          # en pas het wachtwoord aan
-uv run uvicorn app.main:app --reload          # http://localhost:8000
+uv run uvicorn app.main:app --reload --port 8001   # http://localhost:8001
 uv run python -m app.seed --demo              # demo-wedstrijd + 8 links
-uv run pytest                                 # 14 tests
+uv run pytest                                 # 15 tests
 uv run ruff check app tests                   # lint
 ```
+
+De instellingen komen uit `.env.local`, dat naar de lokale Postgres wijst. De volgorde is:
+echte environment variables winnen altijd, daarna `.env.local`, daarna `.env`. Zo draait een
+lokale start nooit per ongeluk tegen de productiedatabase. Op Render bestaan beide bestanden
+niet en komen de waarden uit het dashboard.
+
+Let op de driver in `DATABASE_URL`: dit project gebruikt psycopg 3, dus het schema is
+`postgresql+psycopg://`. Supabase toont een voorbeeld met `postgresql+psycopg2://`, dat is de
+oudere driver en die zit hier niet in.
 
 De demo maakt vier spelers in twee ronden. Open de links van ronde 1 in vier tabbladen en je
 kunt de hele flow in je eentje doorlopen, inclusief het forceren van een conflict.

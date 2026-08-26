@@ -1,35 +1,59 @@
-{#- De tabel van het leaderboard, apart zodat HTMX alleen dit ververst. -#}
-<table class="lijst">
-  <tr>
-    <th>#</th>
-    <th>Speler</th>
-    {% if competition.rounds|length > 1 %}
-      {% for r in competition.rounds %}<th class="getal">R{{ r.no }}</th>{% endfor %}
-    {% endif %}
-    <th class="getal">Holes</th>
-    <th class="getal">Totaal</th>
-    <th class="getal">+/-</th>
-  </tr>
-  {% for row in rows %}
-  <tr class="{% if not row.playing %}uitgevallen{% elif row.done %}klaar{% endif %}">
-    <td>{{ loop.index if row.playing else '' }}</td>
-    <td>
-      {{ row.name }}
-      {% if not row.playing %}<span class="pil rood">{{ row.status|upper }}</span>{% endif %}
-      {% if row.conflicts %}<span class="pil rood">verschil</span>{% endif %}
-    </td>
-    {% if competition.rounds|length > 1 %}
-      {% for r in competition.rounds %}
-        <td class="getal">{{ row.round_totals.get(r.no, '') or '' }}</td>
-      {% endfor %}
-    {% endif %}
-    <td class="getal">{{ row.thru }}</td>
-    <td class="getal"><strong>{{ row.total }}</strong></td>
-    <td class="getal">{% if row.thru %}{{ '%+d'|format(row.to_par) if row.to_par else 'par' }}{% endif %}</td>
-  </tr>
-  {% else %}
-  <tr><td colspan="6">Nog geen deelnemers.</td></tr>
+{#- Live stand als scorekaart: alleen holes waarover speler en marker het eens zijn. -#}
+{%- macro negen(holes, som) -%}
+  {% for strokes, klasse in holes %}
+    <td class="vak {{ klasse }}">{{ strokes if strokes is not none else '' }}</td>
   {% endfor %}
+  <td class="som">{{ som if som is not none else '' }}</td>
+{%- endmacro -%}
+<div class="bord-scroll">
+<table class="bord">
+  <thead>
+    <tr>
+      <th class="pos"></th>
+      <th class="speler">Speler</th>
+      <th class="topar">+/-</th>
+      {% for h in range(1, 10) %}<th>{{ h }}</th>{% endfor %}
+      <th class="som">Out</th>
+      <th class="gat"></th>
+      {% for h in range(10, 19) %}<th>{{ h }}</th>{% endfor %}
+      <th class="som">In</th>
+      <th class="som">Tot</th>
+    </tr>
+    <tr class="pars">
+      <th class="pos"></th>
+      <th class="speler">Par</th>
+      <th class="topar"></th>
+      {% for p in pars[:9] %}<td>{{ p }}</td>{% endfor %}
+      <td class="som">{{ pars[:9] | sum }}</td>
+      <td class="gat"></td>
+      {% for p in pars[9:] %}<td>{{ p }}</td>{% endfor %}
+      <td class="som">{{ pars[9:] | sum }}</td>
+      <td class="som">{{ pars | sum }}</td>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr class="{% if not row.playing %}uitgevallen{% endif %}">
+      <td class="pos">{{ loop.index if row.playing else '' }}</td>
+      <td class="speler">
+        {{ row.name }}{% if not row.playing %} · {{ row.status|upper }}{% endif %}
+        {%- if competition.rounds|length > 1 %} · R{{ row.round_no }}{% endif %}
+      </td>
+      <td class="topar {% if row.to_par < 0 %}onder{% endif %}">
+        {%- if not row.thru %}&ndash;
+        {%- elif row.to_par %}{{ '%+d'|format(row.to_par) }}
+        {%- else %}par{% endif -%}
+      </td>
+      {{ negen(row.holes[:9], row.out) }}
+      <td class="gat"></td>
+      {{ negen(row.holes[9:], row.back) }}
+      <td class="som">{{ row.total if row.total is not none else '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td class="speler" colspan="24">Nog niemand gestart.</td></tr>
+    {% endfor %}
+  </tbody>
 </table>
-<p class="klein">Gesorteerd op slagen ten opzichte van par over de gespeelde holes.
+</div>
+<p class="klein">Een score telt zodra speler en marker hetzelfde invulden.
 Bijgewerkt om {{ bijgewerkt }}.</p>

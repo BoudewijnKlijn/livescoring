@@ -27,27 +27,32 @@ bewuste keuze, geen vergeten onderdeel.
    volgorde. Wil je toch strikt op totaal sorteren, dan is dat één regel in
    `app/scoring.py` (`rows.sort(...)`).
 
-2. **Links zijn na de import eenmalig zichtbaar.** Alleen de sha256-hash staat in de
+2. **Op het leaderboard telt alleen wat speler en marker allebei invulden.** Een hole waar
+   ze het oneens zijn blijft leeg tot ze het eens worden; de stand ten opzichte van par gaat
+   over de holes waar wel overeenstemming over is. Zolang een ronde loopt staat er geen
+   totaal, alleen +/-. Wie nog geen enkele score heeft, staat niet op het bord.
+
+3. **Links zijn na de import eenmalig zichtbaar.** Alleen de sha256-hash staat in de
    database, dus een linkenoverzicht achteraf kan niet zonder de tokens op te slaan.
    In plaats daarvan: kopieer de lijst direct na de import, en ben je hem kwijt, gebruik dan
    *Nieuwe links maken*. Dat maakt verse links en raakt geen enkele score aan.
 
-3. **Roteren en wissen zijn losse acties.** Oorspronkelijk gevraagd als één actie ("nieuwe
+4. **Roteren en wissen zijn losse acties.** Oorspronkelijk gevraagd als één actie ("nieuwe
    link, oude ongeldig, scores weg"). Het geval dat dit oplost, een 3-bal die een 2-bal
    wordt, vraagt om een nieuwe marker, niet om een gewiste kaart. Beide acties vragen een
    viercijferige bevestigingscode zodra er scores staan.
 
-4. **Statussen zijn tekstkolommen met een check constraint**, geen Postgres enums. Een enum
+5. **Statussen zijn tekstkolommen met een check constraint**, geen Postgres enums. Een enum
    uitbreiden vraagt om een migratie, en die is er niet.
 
-5. **De correctieformulieren staan buiten het blok dat elke 5 seconden ververst.** Anders
+6. **De correctieformulieren staan buiten het blok dat elke 5 seconden ververst.** Anders
    typt de admin een reden in een veld dat een seconde later wordt weggegooid.
 
-6. **Eén speler per competitie, geen globale spelersidentiteit.** Wie twee competities
+7. **Eén speler per competitie, geen globale spelersidentiteit.** Wie twee competities
    speelt, is twee rijen met twee links. Een gedeelde identiteit vraagt om matchen op e-mail
    en een samenvoegprobleem bij "J. de Vries" versus "Jan de Vries".
 
-7. **Rate limit en cache op het leaderboard**: de tabel wordt maximaal eens per 3 seconden
+8. **Rate limit en cache op het leaderboard**: de tabel wordt maximaal eens per 3 seconden
    gerenderd en per IP zijn 90 verzoeken per minuut toegestaan. Bij 100 kijkers die elke 5
    seconden pollen is dat ~1 query per 3 seconden in plaats van 20 per seconde.
 

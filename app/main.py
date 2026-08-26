@@ -59,7 +59,7 @@ def healthz() -> dict[str, str]:
 @app.get("/")
 def home() -> RedirectResponse:
     """Stuur door naar het spelersscherm."""
-    return RedirectResponse("/me", status_code=303)
+    return RedirectResponse("/me/card", status_code=303)
 
 
 @app.get("/t/{token}")
@@ -68,21 +68,9 @@ def open_link(token: str, db: DbSession) -> Response:
     entry = db.scalar(select(Entry).where(Entry.token_hash == hash_token(token)))
     if entry is None:
         raise Unauthorized("Deze link is niet (meer) geldig. Vraag de wedstrijdleiding erom.")
-    response = RedirectResponse("/me", status_code=303)
+    response = RedirectResponse("/me/card", status_code=303)
     login_player(response, entry)
     return response
-
-
-@app.get("/me", response_class=HTMLResponse)
-def me(request: Request, entry: CurrentEntry) -> HTMLResponse:
-    """Overzicht: wedstrijd, flight, marker, status van de kaart."""
-    card = build_card(entry)
-    marks = [e for e in entry.flight.entries if e.marker_entry_id == entry.id]
-    return templates.TemplateResponse(
-        request,
-        "me.html",
-        {"entry": entry, "card": card, "marks": marks},
-    )
 
 
 @app.get("/me/card", response_class=HTMLResponse)
@@ -106,10 +94,9 @@ def _cell(
     target: Entry,
     hole: int,
     source: str,
-    error: str | None = None,
     status_code: int = 200,
 ) -> HTMLResponse:
-    """Render één cel plus een out-of-band update van de conflictteller."""
+    """Render één cel van de scorekaart."""
     card = build_card(target)
     return templates.TemplateResponse(
         request,
@@ -120,7 +107,6 @@ def _cell(
             "row": card.rows[hole - 1],
             "source": source,
             "card": card,
-            "error": error,
         },
         status_code=status_code,
     )
@@ -143,11 +129,11 @@ def post_score(
     try:
         value = int(strokes) if strokes.strip() else None
     except ValueError:
-        return _cell(request, entry, target, hole, source, error="Geen getal.", status_code=422)
+        return _cell(request, entry, target, hole, source, status_code=422)
     try:
         set_score(db, entry, target, hole, source, value)
-    except ScoreError as exc:
-        return _cell(request, entry, target, hole, source, error=str(exc), status_code=422)
+    except ScoreError:
+        return _cell(request, entry, target, hole, source, status_code=422)
     return _cell(request, entry, target, hole, source)
 
 
@@ -172,7 +158,7 @@ def do_sign(
     else:
         try:
             sign_card(db, entry)
-            return RedirectResponse("/me", status_code=303)
+            return RedirectResponse("/me/card", status_code=303)
         except ScoreError as exc:
             error = str(exc)
     return templates.TemplateResponse(
@@ -205,6 +191,11 @@ def _klok() -> str:
     return dt.datetime.now(ZoneInfo("Europe/Amsterdam")).strftime("%H:%M:%S")
 
 
+def _pars(competition: Competition) -> list[int]:
+    """De pars van de baan, voor de parregel boven het leaderboard."""
+    return competition.rounds[0].pars if competition.rounds else [4] * 18
+
+
 def _competition(db: DbSession, slug: str) -> Competition:
     """Zoek een competitie op zijn leaderboard-slug."""
     competition = db.scalar(select(Competition).where(Competition.leaderboard_slug == slug))
@@ -223,6 +214,7 @@ def leaderboard_page(request: Request, slug: str, db: DbSession) -> HTMLResponse
         {
             "competition": competition,
             "rows": leaderboard(db, competition),
+            "pars": _pars(competition),
             "bijgewerkt": _klok(),
         },
     )
@@ -241,6 +233,7 @@ def leaderboard_table(request: Request, slug: str, db: DbSession) -> HTMLRespons
         competition=competition,
         rows=leaderboard(db, competition),
         request=request,
+        pars=_pars(competition),
         bijgewerkt=_klok(),
     )
     _LB_CACHE[slug] = (time.monotonic(), html)

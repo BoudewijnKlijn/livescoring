@@ -1,6 +1,6 @@
 :root {
-  --groen: #14532d;
-  --groen-licht: #dcfce7;
+  --accent: #3f3f46;
+  --accent-licht: #e4e4e7;
   --rood: #b91c1c;
   --rood-licht: #fee2e2;
   --grijs: #64748b;
@@ -22,7 +22,7 @@ body {
 }
 
 header {
-  background: var(--groen);
+  background: var(--accent);
   color: #fff;
   padding: 0.9rem 1rem;
   display: flex;
@@ -34,11 +34,11 @@ header a { color: #fff; }
 header .titel { font-weight: 700; font-size: 1.05rem; }
 header .sub { opacity: 0.85; font-size: 0.85rem; }
 
-main { padding: 1rem; max-width: 900px; margin: 0 auto; }
+main { padding: 0.4rem; margin: 0 auto; }
 h1 { font-size: 1.3rem; margin: 0 0 0.75rem; }
 h2 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
 p { margin: 0.5rem 0; }
-a { color: var(--groen); }
+a { color: var(--accent); }
 
 .kaart {
   background: var(--vlak);
@@ -56,7 +56,7 @@ a { color: var(--groen); }
   padding: 0 1.1rem;
   border: 0;
   border-radius: 8px;
-  background: var(--groen);
+  background: var(--accent);
   color: #fff;
   font: inherit;
   font-weight: 600;
@@ -64,7 +64,7 @@ a { color: var(--groen); }
   cursor: pointer;
 }
 .knop.groot { width: 100%; font-size: 1.1rem; min-height: 56px; }
-.knop.secundair, button.secundair { background: #fff; color: var(--groen); border: 2px solid var(--groen); }
+.knop.secundair, button.secundair { background: #fff; color: var(--accent); border: 2px solid var(--accent); }
 .knop.gevaar, button.gevaar { background: var(--rood); }
 button:disabled, .knop.uit { background: var(--grijs); opacity: 0.6; pointer-events: none; }
 
@@ -94,14 +94,14 @@ table.kaarttabel th.kop {
   position: sticky;
   left: 0;
   z-index: 2;
-  background: var(--groen);
+  background: var(--accent);
   color: #fff;
   min-width: 92px;
   padding: 0.35rem 0.5rem;
   text-align: left;
   font-size: 0.8rem;
 }
-table.kaarttabel tr.holes th { background: var(--groen); color: #fff; height: 34px; font-size: 0.85rem; }
+table.kaarttabel tr.holes th { background: var(--accent); color: #fff; height: 34px; font-size: 0.85rem; }
 table.kaarttabel tr.par td { background: #e2e8f0; color: var(--grijs); height: 28px; font-size: 0.8rem; }
 table.kaarttabel td.uit { background: #f8fafc; }
 
@@ -120,42 +120,28 @@ td.cel input.score {
 }
 td.cel input.score::-webkit-outer-spin-button,
 td.cel input.score::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-td.cel input.score:focus { outline: 3px solid var(--groen); outline-offset: -3px; }
-td.cel.eens input.score { background: var(--groen-licht); }
-td.cel.conflict input.score, td.conflict { background: var(--rood-licht); color: var(--rood); }
-td.cel.bezig::after {
-  content: "";
-  position: absolute; inset: auto 0 0 0; height: 3px; background: var(--groen);
-}
-td.cel.mislukt input.score { background: #fef3c7; box-shadow: inset 0 0 0 3px #d97706; }
+td.cel input.score:focus { outline: 3px solid var(--accent); outline-offset: -3px; }
+td.cel.conflict input.score { background: var(--rood-licht); color: var(--rood); }
 td.readonly { height: 30px; font-size: 0.85rem; color: var(--grijs); }
 
 .melding { padding: 0.75rem 1rem; border-radius: 8px; margin: 0.75rem 0; font-weight: 600; }
 .melding.fout { background: var(--rood-licht); color: var(--rood); }
-.melding.goed { background: var(--groen-licht); color: var(--groen); }
+.melding.goed { background: var(--accent-licht); color: var(--accent); }
 .melding.let-op { background: #fef3c7; color: #92400e; }
 
 table.lijst { width: 100%; border-collapse: collapse; background: var(--vlak); }
 table.lijst th, table.lijst td { padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--lijn); text-align: left; }
-table.lijst th { background: var(--groen); color: #fff; font-size: 0.85rem; }
+table.lijst th { background: var(--accent); color: #fff; font-size: 0.85rem; }
 table.lijst td.getal, table.lijst th.getal { text-align: right; font-variant-numeric: tabular-nums; }
 table.lijst tr.uitgevallen td { color: var(--grijs); text-decoration: line-through; }
-table.lijst tr.klaar td:first-child::after { content: " ✓"; color: var(--groen); }
+table.lijst tr.klaar td:first-child::after { content: " ✓"; color: var(--accent); }
 
 .rij { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
 .klein { font-size: 0.85rem; color: var(--grijs); }
 .pil { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
 .pil.rood { background: var(--rood-licht); color: var(--rood); }
-.pil.groen { background: var(--groen-licht); color: var(--groen); }
+.pil.groen { background: var(--accent-licht); color: var(--accent); }
 
-td.cel .ander {
-  position: absolute;
-  top: 1px;
-  right: 3px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--rood);
-}
 .stand {
   background: var(--vlak);
   border: 1px solid var(--lijn);
@@ -164,3 +150,53 @@ td.cel .ander {
   margin: 0.5rem 0;
   font-size: 0.95rem;
 }
+
+/* Leaderboard: elke hole een vakje, gekleurd naar par. */
+/* Leaderboard: papieren scorekaart. Rustig raster, de scores dragen de kleur. */
+.bord-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--vlak);
+  border: 1px solid var(--lijn);
+  border-radius: 10px;
+}
+table.bord {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: max-content;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+table.bord th, table.bord td {
+  width: 30px;
+  height: 34px;
+  padding: 0;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+table.bord thead th { color: var(--grijs); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; }
+table.bord tr.pars td, table.bord tr.pars th { color: var(--grijs); font-size: 0.72rem; height: 22px; }
+table.bord thead tr.pars td, table.bord thead tr.pars th { border-bottom: 1px solid var(--lijn); }
+table.bord tbody tr + tr th, table.bord tbody tr + tr td { border-top: 1px solid var(--lijn); }
+
+/* Vastgezette kolommen: positie, naam en de stand tegen par blijven altijd zichtbaar. */
+table.bord .pos    { position: sticky; left: 0;      width: 26px;  background: var(--vlak); z-index: 2; color: var(--grijs); font-size: 0.75rem; }
+table.bord .speler { position: sticky; left: 26px;   width: 116px; background: var(--vlak); z-index: 2;
+                     text-align: left; padding: 0 0.4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.bord .topar  { position: sticky; left: 142px;  width: 44px;  background: var(--vlak); z-index: 2;
+                     font-weight: 700; box-shadow: 1px 0 0 var(--lijn); }
+table.bord .topar.onder { color: #dc2626; }
+
+table.bord .gat { width: 12px; background: var(--achtergrond); }
+table.bord .som { width: 38px; font-weight: 700; background: #fafafa; }
+table.bord thead .som { color: var(--tekst); }
+
+table.bord td.vak { font-weight: 700; }
+td.vak.eagle  { background: #facc15; color: #000; }
+td.vak.birdie { background: #dc2626; color: #fff; }
+td.vak.par    { background: var(--vlak); color: var(--tekst); }
+td.vak.bogey  { background: #2563eb; color: #fff; }
+td.vak.dubbel { background: #000000; color: #fff; }
+
+table.bord tr.uitgevallen .speler { color: var(--grijs); text-decoration: line-through; }

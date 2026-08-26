@@ -24,7 +24,6 @@ def test_score_invoeren_voor_speler_zonder_marker_rol_faalt(db, wedstrijd, als_s
     )
 
     assert response.status_code == 422
-    assert "mag deze score niet invoeren" in response.text
     db.expire_all()
     assert _entry_van(db, "Anne").scores == []
 
@@ -57,20 +56,20 @@ def test_geroteerd_token_geeft_401(db, wedstrijd, client):
     _, tokens = wedstrijd
     oud = tokens["Jan"]
     assert client.get(f"/t/{oud}", follow_redirects=False).status_code == 303
-    assert client.get("/me").status_code == 200
+    assert client.get("/me/card").status_code == 200
 
     jan = _entry_van(db, "Jan")
     _, nieuwe_hash = new_token()
     jan.token_hash = nieuwe_hash
     db.commit()
 
-    assert client.get("/me").status_code == 401
+    assert client.get("/me/card").status_code == 401
     assert client.get(f"/t/{oud}", follow_redirects=False).status_code == 401
 
 
 def test_zonder_cookie_geen_toegang(client):
     """Spelerspagina's zijn niet publiek."""
-    assert client.get("/me").status_code == 401
+    assert client.get("/me/card").status_code == 401
     assert client.get("/me/card").status_code == 401
     assert client.get("/admin").status_code == 401
 

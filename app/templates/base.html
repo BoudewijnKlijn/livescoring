@@ -10,13 +10,13 @@
 <script src="/static/htmx.min.js" defer></script>
 </head>
 <body>
-<header>
+{% block header %}<header>
   <div>
     <div class="titel">{% block kop %}Live scoring{% endblock %}</div>
     <div class="sub">{% block subkop %}{% endblock %}</div>
   </div>
   {% block headeractie %}{% endblock %}
-</header>
+</header>{% endblock %}
 <main>
 {% block inhoud %}{% endblock %}
 </main>

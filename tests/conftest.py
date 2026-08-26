@@ -9,6 +9,7 @@ BASE = "postgresql+psycopg://livescoring:livescoring@localhost:5434"
 os.environ["DATABASE_URL"] = f"{BASE}/{TEST_DB}"
 os.environ["ADMIN_PASSWORD"] = "testwachtwoord"
 os.environ["SECRET_KEY"] = "test-secret"
+os.environ["COOKIE_SECURE"] = "false"  # TestClient praat http, geen https
 
 import psycopg  # noqa: E402
 import pytest  # noqa: E402
