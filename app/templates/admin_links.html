@@ -2,36 +2,52 @@
 {% block title %}Links{% endblock %}
 {% block kop %}Persoonlijke links{% endblock %}
 {% block subkop %}{{ competition.name }}{% endblock %}
-{% block headeractie %}<a class="knop secundair" href="/admin/c/{{ competition.id }}">Terug</a>{% endblock %}
+{% block headeractie %}<a class="knop secundair" href="/admin/c/{{ competition.id }}">Naar beheer</a>{% endblock %}
 {% block inhoud %}
 <p class="melding let-op">{{ note }}</p>
 
 <div class="kaart">
-  <button class="knop groot" type="button" onclick="kopieer()">Kopieer alle links</button>
-  <p id="gekopieerd" class="klein"></p>
-  <textarea id="alles" readonly>{{ text }}</textarea>
+  <div class="rij">
+    <button class="knop" type="button" onclick="kopieer(document.getElementById('alles').value, this)">
+      Kopieer alles voor Excel
+    </button>
+    <button class="knop secundair" type="button" onclick="download()">Download CSV</button>
+  </div>
+  <p class="klein">Plakken in Excel zet naam, ronde en link meteen in aparte kolommen.</p>
+  <textarea id="alles" readonly>{{ tekst }}</textarea>
 </div>
 
 <table class="lijst">
-  <tr><th>Speler</th><th>Ronde</th><th>Link</th></tr>
-  {% for name, round_no, token in links|sort(attribute='1,0') %}
+  <tr><th>Speler</th><th>Ronde</th><th>Link</th><th></th></tr>
+  {% for r in rijen %}
   <tr>
-    <td>{{ name }}</td>
-    <td>{{ round_no }}</td>
-    <td><input type="text" readonly value="{{ base_url }}/t/{{ token }}" onclick="this.select()"></td>
+    <td>{{ r.naam }}</td>
+    <td>{{ r.ronde }}</td>
+    <td><input type="text" readonly value="{{ r.link }}" onclick="this.select()"></td>
+    <td><button class="knop secundair" type="button"
+                onclick="kopieer({{ r.link | tojson }}, this)">Kopieer</button></td>
   </tr>
   {% endfor %}
 </table>
 
 <script>
-function kopieer() {
-  var veld = document.getElementById('alles');
-  veld.select();
-  navigator.clipboard.writeText(veld.value).then(function () {
-    document.getElementById('gekopieerd').textContent = 'Gekopieerd naar het klembord.';
+function kopieer(tekst, knop) {
+  var was = knop.textContent;
+  navigator.clipboard.writeText(tekst).then(function () {
+    knop.textContent = 'Gekopieerd';
+    setTimeout(function () { knop.textContent = was; }, 1500);
   }, function () {
-    document.getElementById('gekopieerd').textContent = 'Kopiëren lukte niet: selecteer de tekst zelf.';
+    knop.textContent = 'Kopiëren lukt niet, selecteer zelf';
   });
+}
+function download() {
+  var csv = document.getElementById('alles').value.split('\t').join(';');
+  var blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'links-{{ competition.name | replace(" ", "-") | lower }}.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 </script>
 {% endblock %}

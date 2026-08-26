@@ -41,16 +41,20 @@ def confirm_code() -> str:
 def _links_page(
     request: Request, competition: Competition, links: list[tuple[str, int, str]], note: str
 ) -> HTMLResponse:
-    """Toon nieuwe links één keer: ze zijn daarna niet meer op te vragen."""
-    lines = [
-        f"{name} (ronde {round_no}): {settings.base_url}/t/{token}"
-        for name, round_no, token in sorted(links, key=lambda x: (x[1], x[0]))
+    """Toon nieuwe links één keer: ze zijn daarna niet meer op te vragen.
+
+    De tekst is tabgescheiden, want dat plakt in Excel meteen in kolommen.
+    """
+    rijen = [
+        {"naam": naam, "ronde": ronde, "link": f"{settings.base_url}/t/{token}"}
+        for naam, ronde, token in sorted(links, key=lambda x: (x[1], x[0]))
     ]
+    kop = "Naam\tRonde\tLink"
+    tekst = "\n".join([kop] + [f"{r['naam']}\t{r['ronde']}\t{r['link']}" for r in rijen])
     return templates.TemplateResponse(
         request,
         "admin_links.html",
-        {"competition": competition, "links": links, "text": "\n".join(lines), "note": note,
-         "base_url": settings.base_url},
+        {"competition": competition, "rijen": rijen, "tekst": tekst, "note": note},
     )
 
 

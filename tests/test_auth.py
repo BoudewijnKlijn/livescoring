@@ -160,3 +160,19 @@ def test_import_met_fout_in_een_regel_wijzigt_niets(db, wedstrijd, client):
     assert "Jan" in antwoord.text
     db.expire_all()
     assert len(db.scalars(select(Entry)).all()) == voor
+
+
+def test_links_zijn_tabgescheiden_voor_excel(db, wedstrijd, client):
+    """De linkenlijst plakt in kolommen: tabs tussen naam, ronde en link."""
+    competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+
+    antwoord = client.post(
+        f"/admin/c/{competition.id}/import",
+        data={"csv_tekst": "naam,ronde,flight,marker\nNieuw Een,2,Z,Nieuw Twee\n"
+                           "Nieuw Twee,2,Z,Nieuw Een"},
+    )
+
+    assert antwoord.status_code == 200
+    assert "Naam\tRonde\tLink" in antwoord.text
+    assert re.search(r"Nieuw Een\t2\thttp\S+/t/\S+", antwoord.text)
