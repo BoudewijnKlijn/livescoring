@@ -67,9 +67,17 @@ bewuste keuze, geen vergeten onderdeel.
    speelt, is twee rijen met twee links. Een gedeelde identiteit vraagt om matchen op e-mail
    en een samenvoegprobleem bij "J. de Vries" versus "Jan de Vries".
 
-10. **Rate limit en cache op het leaderboard**: de tabel wordt maximaal eens per 3 seconden
-   gerenderd en per IP zijn 90 verzoeken per minuut toegestaan. Bij 100 kijkers die elke 5
-   seconden pollen is dat ~1 query per 3 seconden in plaats van 20 per seconde.
+10. **Het leaderboard heeft een cache van 3 seconden en geen limiet per IP.** De tabel
+   wordt hooguit eens per drie seconden opgebouwd; 120 kijkers die elke 5 seconden
+   verversen kosten daardoor ongeveer één query per drie seconden en één
+   databaseverbinding. Een limiet per IP stond er eerst wel, maar die werkt hier averechts:
+   op de wifi van het clubhuis en achter de proxy van de hoster lijkt iedereen dezelfde
+   bezoeker, dus de limiet raakte de toeschouwers en niet een aanvaller. Gemeten met 120
+   gelijktijdige kijkers: 600 verzoeken, 0 fouten, 1 verbinding.
+
+11. **De verbindingen naar de database zijn er hooguit tien**, ongeacht het aantal spelers:
+   `pool_size=5` plus `max_overflow=5` in `app/models.py`. Een speler of kijker is geen
+   verbinding; een verzoek leent er kort een en geeft hem meteen terug.
 
 ## Nog niet gebouwd
 

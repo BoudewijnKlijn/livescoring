@@ -171,22 +171,9 @@ def do_sign(
 
 
 _LB_CACHE: dict[str, tuple[float, str]] = {}
-_RATE: dict[str, tuple[float, int]] = {}
 CACHE_SECONDS = 3.0
 PAGINA_SECONDEN = 60
 SPELERS_PER_SCHERM = 25
-
-
-def _rate_limited(request: Request, limit: int = 90, window: float = 60.0) -> bool:
-    """Simpele rate limit per IP voor de publieke pagina's."""
-    ip = request.client.host if request.client else "?"
-    start, count = _RATE.get(ip, (0.0, 0))
-    moment = time.monotonic()
-    if moment - start > window:
-        _RATE[ip] = (moment, 1)
-        return False
-    _RATE[ip] = (start, count + 1)
-    return count + 1 > limit
 
 
 def _klok() -> str:
@@ -238,9 +225,13 @@ def leaderboard_page(
 def leaderboard_table(
     request: Request, slug: str, db: DbSession, n: int = SPELERS_PER_SCHERM
 ) -> HTMLResponse:
-    """Alleen de tabel, voor de HTMX-polling. Drie seconden gecachet per scherm."""
-    if _rate_limited(request):
-        return HTMLResponse("<p>Even rustig aan.</p>", status_code=429)
+    """Alleen de tabel, voor de HTMX-polling. Drie seconden gecachet per scherm.
+
+    Geen limiet per IP: achter de wifi van het clubhuis en achter de proxy van de hoster
+    lijkt iedereen dezelfde bezoeker, en dan sluit zo'n limiet juist de toeschouwers buiten.
+    De cache is de bescherming: hoeveel kijkers er ook zijn, de tabel wordt hooguit eens per
+    drie seconden opgebouwd.
+    """
     minuut = int(time.time() // PAGINA_SECONDEN)
     sleutel = f"{slug}:{n}:{minuut}"
     cached = _LB_CACHE.get(sleutel)
