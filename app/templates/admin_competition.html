@@ -58,6 +58,129 @@
 {% endfor %}
 
 <div class="kaart">
+  <h2>Spelers <span class="klein">{{ deelnames|length }} deelname(s)</span></h2>
+  {% if deelnames %}
+  <div class="scroller">
+    <table class="lijst">
+      <tr>
+        <th>Naam</th><th>E-mail</th><th>Ronde</th><th>Flight</th><th>Start</th>
+        <th>Marker</th><th class="getal">Holes</th><th class="getal">Totaal</th><th>Status</th>
+      </tr>
+      {% for d in deelnames %}
+      <tr>
+        <td>{{ d.entry.player.name }}</td>
+        <td class="klein">{{ d.entry.player.email or '—' }}</td>
+        <td>{{ d.round.no }}</td>
+        <td>{{ d.entry.flight.name }}</td>
+        <td>{{ d.entry.flight.start_hole }}</td>
+        <td class="klein">{{ d.marker or '— geen —' }}</td>
+        <td class="getal">{{ d.thru }}/18</td>
+        <td class="getal">{{ d.total }}</td>
+        <td>
+          {% if d.entry.status != 'ok' %}<span class="pil rood">{{ d.entry.status|upper }}</span>{% endif %}
+          {% if d.conflicts %}<span class="pil rood">verschil {{ d.conflicts|join(', ') }}</span>{% endif %}
+          {% if d.entry.locked %}<span class="pil ok">getekend</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <p class="klein">Klopt er iets niet in deze lijst? Verwijder alle spelers en importeer een
+    verbeterd bestand. Eén speler die niet meespeelt zet je op WD, NR of DQ; dan blijft zijn
+    kaart bewaard.</p>
+  <form method="post" action="/admin/c/{{ competition.id }}/wissen">
+    <input type="hidden" name="verwacht" value="{{ code }}">
+    <label>Alles verwijderen? Typ ter bevestiging: <strong>{{ code }}</strong></label>
+    <input type="text" name="code" autocapitalize="characters" style="max-width:8rem">
+    <p></p>
+    <button class="knop gevaar" type="submit">Alle spelers en scores verwijderen</button>
+  </form>
+  {% else %}
+  <p class="klein">Nog geen spelers. Importeer ze hierboven.</p>
+  {% endif %}
+</div>
+
+{% if deelnames %}
+{% macro spelerkeuze(naam) %}
+<select name="{{ naam }}" required>
+  <option value="">Kies speler…</option>
+  {% for d in deelnames %}
+    <option value="{{ d.entry.id }}">R{{ d.round.no }} · {{ d.entry.flight.name }} · {{ d.entry.player.name }}</option>
+  {% endfor %}
+</select>
+{% endmacro %}
+
+<div class="kaart">
+  <h2>Score corrigeren</h2>
+  <p class="klein">Overschrijft beide invoeren van die hole, ook op een getekende kaart.
+    De reden komt in de audit log.</p>
+  <form method="post" action="/admin/entry/0/score"
+        onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/score'">
+    {{ spelerkeuze('entry_kiezer') }}
+    <div class="rij">
+      <span><label for="hole">Hole</label>
+        <input id="hole" type="number" name="hole" min="1" max="18" required style="width:6rem"></span>
+      <span><label for="strokes">Slagen</label>
+        <input id="strokes" type="number" name="strokes" min="1" max="20" style="width:6rem"></span>
+    </div>
+    <label for="reden">Reden (verplicht)</label>
+    <input id="reden" type="text" name="reden" required>
+    <p></p>
+    <button class="knop" type="submit">Corrigeren</button>
+  </form>
+</div>
+
+<div class="kaart">
+  <h2>Status wijzigen</h2>
+  <p class="klein">DQ, NR of WD halen een speler uit de rangschikking.</p>
+  <form method="post" action="/admin/entry/0/status"
+        onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/status'">
+    {{ spelerkeuze('entry_kiezer') }}
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      <option value="ok">ok — speelt</option>
+      <option value="dq">dq — gediskwalificeerd</option>
+      <option value="nr">nr — no return</option>
+      <option value="wd">wd — teruggetrokken</option>
+    </select>
+    <label for="reden2">Reden</label>
+    <input id="reden2" type="text" name="reden">
+    <p></p>
+    <button class="knop" type="submit">Status opslaan</button>
+  </form>
+</div>
+
+<div class="kaart">
+  <h2>Kaart ontgrendelen</h2>
+  <p class="klein">Maakt een getekende kaart weer bewerkbaar voor de speler.</p>
+  <form method="post" action="/admin/entry/0/unlock"
+        onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/unlock'">
+    {{ spelerkeuze('entry_kiezer') }}
+    <label for="reden3">Reden</label>
+    <input id="reden3" type="text" name="reden">
+    <p></p>
+    <button class="knop secundair" type="submit">Ontgrendelen</button>
+  </form>
+</div>
+
+<div class="kaart">
+  <h2>Kaart leegmaken</h2>
+  <p class="melding fout">Wist alle scores van die speler in die ronde. Niet terug te draaien.</p>
+  <form method="post" action="/admin/entry/0/reset"
+        onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/reset'">
+    {{ spelerkeuze('entry_kiezer') }}
+    <input type="hidden" name="verwacht" value="{{ code }}">
+    <label>Typ ter bevestiging: <strong>{{ code }}</strong></label>
+    <input type="text" name="code" autocapitalize="characters" style="max-width:8rem">
+    <label for="reden4">Reden</label>
+    <input id="reden4" type="text" name="reden">
+    <p></p>
+    <button class="knop gevaar" type="submit">Kaart leegmaken</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="kaart">
   <h2>Nieuwe links maken</h2>
   <p class="klein">Vervangt de links van alle spelers in deze wedstrijd. Oude links werken
     daarna niet meer. <strong>Scores blijven staan.</strong> Gebruik dit ook als je de

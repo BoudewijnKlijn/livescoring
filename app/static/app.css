@@ -142,7 +142,7 @@ table.lijst tr.klaar td:first-child::after { content: " ✓"; color: var(--accen
 .klein { font-size: 0.85rem; color: var(--grijs); }
 .pil { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
 .pil.rood { background: var(--rood-licht); color: var(--rood); }
-.pil.groen { background: var(--accent-licht); color: var(--accent); }
+.pil.ok { background: var(--accent-licht); color: var(--accent); }
 
 .stand {
   background: var(--vlak);

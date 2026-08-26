@@ -1,4 +1,4 @@
-"""Adminroutes: import, links, live overzicht, correcties en export.
+"""Adminroutes: import, spelerslijst, links, correcties en export.
 
 De admin is de enige die de invoer van een ander mag overschrijven, een kaart mag
 ontgrendelen en een link mag vervangen. Elke ingreep gaat naar de audit log.
@@ -117,6 +117,7 @@ def competition_page(
             "base_url": settings.base_url,
             "code": confirm_code(),
             "holes": range(1, HOLES + 1),
+            "deelnames": _deelnames(competition),
         },
     )
 
@@ -169,39 +170,23 @@ def set_pars(
     return RedirectResponse(f"/admin/c/{rnd.competition_id}", status_code=303)
 
 
-@router.get("/c/{competition_id}/live", response_class=HTMLResponse)
-def live(request: Request, competition_id: int, db: DbSession, _: AdminOnly) -> HTMLResponse:
-    """Live voortgang per flight, ververst elke 5 seconden."""
-    competition = _get_competition(db, competition_id)
-    return templates.TemplateResponse(
-        request,
-        "admin_live.html",
-        {"competition": competition, "code": confirm_code(), **_live_data(competition)},
-    )
-
-
-@router.get("/c/{competition_id}/live/table", response_class=HTMLResponse)
-def live_table(request: Request, competition_id: int, db: DbSession, _: AdminOnly) -> HTMLResponse:
-    """Alleen de tabel van het live overzicht."""
-    competition = _get_competition(db, competition_id)
-    return templates.TemplateResponse(
-        request, "_admin_live_table.html", {"competition": competition, **_live_data(competition)}
-    )
-
-
-def _live_data(competition: Competition) -> dict:
-    """Voortgang per flight met kaarten en conflicten."""
-    flights = []
+def _deelnames(competition: Competition) -> list[dict]:
+    """Alle deelnames met wat er is geïmporteerd, plus de stand van hun kaart."""
+    regels = []
     for rnd in competition.rounds:
-        for flight in rnd.flights:
-            flights.append(
+        for entry in sorted(rnd.entries, key=lambda e: (e.flight.name, e.player.name)):
+            card = build_card(entry)
+            regels.append(
                 {
+                    "entry": entry,
                     "round": rnd,
-                    "flight": flight,
-                    "cards": [(e, build_card(e)) for e in flight.entries],
+                    "marker": entry.marker.player.name if entry.marker else None,
+                    "thru": card.thru,
+                    "total": card.total,
+                    "conflicts": card.conflicts,
                 }
             )
-    return {"flights": flights}
+    return regels
 
 
 @router.post("/entry/{entry_id}/score")
@@ -218,9 +203,7 @@ def override_score(
     if entry is None:
         raise AppError("Deze deelname bestaat niet.", 404)
     if not reden.strip():
-        return RedirectResponse(
-            f"/admin/c/{entry.round.competition_id}/live?fout=reden", status_code=303
-        )
+        raise AppError("Vul een reden in bij een correctie. Er is niets gewijzigd.", 400)
     value = int(strokes) if strokes.strip() else None
     for source in ("self", "marker"):
         row = db.scalar(
@@ -239,7 +222,7 @@ def override_score(
         row.updated_at = now()
     log(db, "admin", "override", entry=entry.id, hole=hole, strokes=value, reason=reden.strip())
     db.commit()
-    return RedirectResponse(f"/admin/c/{entry.round.competition_id}/live", status_code=303)
+    return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
 
 
 @router.post("/entry/{entry_id}/status")
@@ -253,7 +236,7 @@ def set_status(
     entry.status = status
     log(db, "admin", "status", entry=entry.id, status=status, reason=reden.strip())
     db.commit()
-    return RedirectResponse(f"/admin/c/{entry.round.competition_id}/live", status_code=303)
+    return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
 
 
 @router.post("/entry/{entry_id}/unlock")
@@ -266,7 +249,7 @@ def unlock(entry_id: int, db: DbSession, _: AdminOnly, reden: str = Form("")) ->
     entry.signed_at = None
     log(db, "admin", "unlock", entry=entry.id, reason=reden.strip())
     db.commit()
-    return RedirectResponse(f"/admin/c/{entry.round.competition_id}/live", status_code=303)
+    return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
 
 
 def _rotate(db: DbSession, entries: list[Entry]) -> list[tuple[str, int, str]]:
@@ -344,7 +327,36 @@ def reset_card(
     entry.locked = False
     log(db, "admin", "reset_card", entry=entry.id, reason=reden.strip())
     db.commit()
-    return RedirectResponse(f"/admin/c/{entry.round.competition_id}/live", status_code=303)
+    return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
+
+
+@router.post("/c/{competition_id}/wissen")
+def wis_spelers(
+    competition_id: int,
+    db: DbSession,
+    _: AdminOnly,
+    code: str = Form(""),
+    verwacht: str = Form(""),
+) -> Response:
+    """Verwijder alle spelers, flights, ronden en scores van deze competitie.
+
+    Bedoeld om opnieuw te beginnen met een verbeterd CSV-bestand. De competitie zelf en de
+    leaderboardlink blijven bestaan.
+    """
+    competition = _get_competition(db, competition_id)
+    _check_code(code, verwacht)
+    aantal = sum(len(rnd.entries) for rnd in competition.rounds)
+    for rnd in competition.rounds:
+        for entry in rnd.entries:
+            entry.marker_entry_id = None  # spelers wijzen naar elkaar; eerst losknopen
+    db.flush()
+    for rnd in list(competition.rounds):
+        db.delete(rnd)
+    for player in list(competition.players):
+        db.delete(player)
+    log(db, "admin", "wis_spelers", competition=competition.id, deelnames=aantal)
+    db.commit()
+    return RedirectResponse(f"/admin/c/{competition_id}", status_code=303)
 
 
 @router.get("/c/{competition_id}/export.csv")

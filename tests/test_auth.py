@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import select
 
 from app.auth import new_token
-from app.models import Entry, Player
+from app.models import Competition, Entry, Player
 
 
 def _entry_van(db, naam: str) -> Entry:
@@ -80,3 +82,44 @@ def test_leaderboard_is_publiek_op_slug(client, wedstrijd):
 
     assert client.get(f"/l/{competition.leaderboard_slug}").status_code == 200
     assert client.get("/l/bestaat-niet").status_code == 401
+
+
+def test_admin_wist_alle_spelers(db, wedstrijd, client):
+    """Alles verwijderen maakt de competitie leeg, maar laat de wedstrijd zelf staan.
+
+    De spelers zijn elkaars marker, dus de verwijzingen moeten eerst los voordat de rijen
+    weg kunnen.
+    """
+    competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    pagina = client.get(f"/admin/c/{competition.id}")
+    assert "Jan" in pagina.text
+
+    code = re.search(r'name="verwacht" value="([A-Z]{4})"', pagina.text).group(1)
+    antwoord = client.post(
+        f"/admin/c/{competition.id}/wissen",
+        data={"verwacht": code, "code": code},
+        follow_redirects=False,
+    )
+
+    assert antwoord.status_code == 303
+    db.expire_all()
+    ververst = db.get(Competition, competition.id)
+    assert ververst is not None, "de competitie zelf blijft bestaan"
+    assert ververst.rounds == []
+    assert ververst.players == []
+    assert db.scalars(select(Entry)).all() == []
+
+
+def test_wissen_zonder_juiste_code_verandert_niets(db, wedstrijd, client):
+    """Een verkeerde bevestigingscode laat alles staan."""
+    competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+
+    antwoord = client.post(
+        f"/admin/c/{competition.id}/wissen", data={"verwacht": "ABCD", "code": "ZZZZ"}
+    )
+
+    assert antwoord.status_code == 400
+    db.expire_all()
+    assert db.scalars(select(Entry)).all() != []

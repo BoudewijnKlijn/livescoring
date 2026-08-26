@@ -77,12 +77,13 @@ dezelfde `DATABASE_URL`.
    `?n=40` voor een grote televisie, `?n=10` voor een telefoon. De adminpagina bouwt die
    link voor je. Alle schermen die dezelfde wedstrijd tonen lopen gelijk, want welk groepje
    aan de beurt is volgt uit de klok van de server.
-4. Houd `/admin/c/<id>/live` open: voortgang, verschillen en ontbrekende markerscores.
+4. Op de beheerpagina staat de spelerslijst: wie is geïmporteerd, in welke flight, met
+   welke marker en hoe ver ze zijn. De voortgang per flight volg je op het leaderboard.
 5. Na afloop: *Uitslag CSV* en *Audit log CSV* downloaden. Dat is meteen je back-up.
 
 ## Correcties tijdens de wedstrijd
 
-Alles staat op de live-pagina:
+Alles staat op de beheerpagina van de wedstrijd:
 
 - **Score corrigeren** overschrijft beide invoeren van één hole, ook op een getekende kaart.
   Reden is verplicht en komt in de audit log.
@@ -91,6 +92,10 @@ Alles staat op de live-pagina:
 - **Nieuwe links maken** vervangt links (bijvoorbeeld bij een gewijzigde flight of een
   verloren telefoon) zonder scores te raken.
 - **Kaart leegmaken** wist wél alle scores. Vraagt om een viercijferige bevestigingscode.
+- **Alle spelers en scores verwijderen** maakt de wedstrijd leeg zodat je een verbeterd
+  CSV-bestand kunt importeren. De wedstrijd zelf en de leaderboardlink blijven bestaan.
+  Vraagt ook om de bevestigingscode. Gaat het maar om één speler die niet meespeelt, zet
+  hem dan op WD, NR of DQ: dan blijft zijn kaart bewaard.
 
 Een flightwijziging vraagt géén nieuwe link: `/me` leest flight en marker bij elke pagina
 opnieuw.
