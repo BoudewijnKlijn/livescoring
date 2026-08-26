@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.admin import router as admin_router
 from app.auth import AppError, CurrentEntry, DbSession, Unauthorized, hash_token, login_player
@@ -172,6 +173,8 @@ def do_sign(
 _LB_CACHE: dict[str, tuple[float, str]] = {}
 _RATE: dict[str, tuple[float, int]] = {}
 CACHE_SECONDS = 3.0
+PAGINA_SECONDEN = 60
+SPELERS_PER_SCHERM = 25
 
 
 def _rate_limited(request: Request, limit: int = 90, window: float = 60.0) -> bool:
@@ -191,6 +194,20 @@ def _klok() -> str:
     return dt.datetime.now(ZoneInfo("Europe/Amsterdam")).strftime("%H:%M:%S")
 
 
+def _blader(rijen: list, per_scherm: int) -> tuple[list, int, int]:
+    """Kies het stuk van de stand dat nu aan de beurt is.
+
+    Welk stuk dat is volgt uit de klok van de server, niet uit de browser: elk scherm dat
+    dezelfde wedstrijd toont, toont dus dezelfde spelers. Past iedereen in één scherm, dan
+    valt er niets te bladeren.
+    """
+    per_scherm = max(1, per_scherm)
+    schermen = max(1, -(-len(rijen) // per_scherm))
+    huidig = int(time.time() // PAGINA_SECONDEN) % schermen
+    start = huidig * per_scherm
+    return rijen[start : start + per_scherm], start, schermen
+
+
 def _pars(competition: Competition) -> list[int]:
     """De pars van de baan, voor de parregel boven het leaderboard."""
     return competition.rounds[0].pars if competition.rounds else [4] * 18
@@ -205,36 +222,49 @@ def _competition(db: DbSession, slug: str) -> Competition:
 
 
 @app.get("/l/{slug}", response_class=HTMLResponse)
-def leaderboard_page(request: Request, slug: str, db: DbSession) -> HTMLResponse:
-    """Publieke stand van een competitie."""
+def leaderboard_page(
+    request: Request, slug: str, db: DbSession, n: int = SPELERS_PER_SCHERM
+) -> HTMLResponse:
+    """Publieke stand van een competitie. `n` is het aantal spelers per scherm."""
     competition = _competition(db, slug)
     return templates.TemplateResponse(
         request,
         "leaderboard.html",
-        {
-            "competition": competition,
-            "rows": leaderboard(db, competition),
-            "pars": _pars(competition),
-            "bijgewerkt": _klok(),
-        },
+        {"competition": competition, "n": n, **_bord(db, competition, n)},
     )
 
 
 @app.get("/l/{slug}/table", response_class=HTMLResponse)
-def leaderboard_table(request: Request, slug: str, db: DbSession) -> HTMLResponse:
-    """Alleen de tabel, voor de HTMX-polling. Drie seconden gecachet."""
+def leaderboard_table(
+    request: Request, slug: str, db: DbSession, n: int = SPELERS_PER_SCHERM
+) -> HTMLResponse:
+    """Alleen de tabel, voor de HTMX-polling. Drie seconden gecachet per scherm."""
     if _rate_limited(request):
         return HTMLResponse("<p>Even rustig aan.</p>", status_code=429)
-    cached = _LB_CACHE.get(slug)
+    minuut = int(time.time() // PAGINA_SECONDEN)
+    sleutel = f"{slug}:{n}:{minuut}"
+    cached = _LB_CACHE.get(sleutel)
     if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
         return HTMLResponse(cached[1])
     competition = _competition(db, slug)
     html = templates.get_template("_leaderboard_table.html").render(
-        competition=competition,
-        rows=leaderboard(db, competition),
-        request=request,
-        pars=_pars(competition),
-        bijgewerkt=_klok(),
+        request=request, competition=competition, **_bord(db, competition, n)
     )
-    _LB_CACHE[slug] = (time.monotonic(), html)
+    if len(_LB_CACHE) > 50:
+        _LB_CACHE.clear()  # sleutels bevatten de minuut, dus ruim ze af en toe op
+    _LB_CACHE[sleutel] = (time.monotonic(), html)
     return HTMLResponse(html)
+
+
+def _bord(db: Session, competition: Competition, per_scherm: int) -> dict:
+    """Alles wat de leaderboardtabel nodig heeft, inclusief het juiste stuk van de stand."""
+    alle = leaderboard(db, competition)
+    rijen, start, schermen = _blader(alle, per_scherm)
+    return {
+        "rows": rijen,
+        "offset": start,
+        "totaal": len(alle),
+        "schermen": schermen,
+        "pars": _pars(competition),
+        "bijgewerkt": _klok(),
+    }

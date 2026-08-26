@@ -71,7 +71,12 @@ dezelfde `DATABASE_URL`.
 2. **Kopieer meteen de linkenlijst.** Alleen de hash van een token staat in de database, dus
    de links zijn achteraf niet meer op te vragen. Kwijt? Gebruik *Nieuwe links maken*: dat
    maakt verse links en laat alle scores staan.
-3. Deel de leaderboard-link met toeschouwers.
+3. Deel de leaderboard-link met toeschouwers. Passen niet alle spelers op het scherm, dan
+   toont het bord er 25 tegelijk en springt het elke minuut naar de volgende groep, net zo
+   lang tot het weer vooraan begint. Een ander aantal per scherm zet je in de link:
+   `?n=40` voor een grote televisie, `?n=10` voor een telefoon. De adminpagina bouwt die
+   link voor je. Alle schermen die dezelfde wedstrijd tonen lopen gelijk, want welk groepje
+   aan de beurt is volgt uit de klok van de server.
 4. Houd `/admin/c/<id>/live` open: voortgang, verschillen en ontbrekende markerscores.
 5. Na afloop: *Uitslag CSV* en *Audit log CSV* downloaden. Dat is meteen je back-up.
 

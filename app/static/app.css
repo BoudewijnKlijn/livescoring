@@ -24,7 +24,7 @@ body {
 header {
   background: var(--accent);
   color: #fff;
-  padding: 0.9rem 1rem;
+  padding: 0.55rem 0.75rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -33,8 +33,10 @@ header {
 header a { color: #fff; }
 header .titel { font-weight: 700; font-size: 1.05rem; }
 header .sub { opacity: 0.85; font-size: 0.85rem; }
+header .sub:empty { display: none; }
 
 main { padding: 0.4rem; margin: 0 auto; }
+main > .klein { margin: 0.35rem 0 0; }
 h1 { font-size: 1.3rem; margin: 0 0 0.75rem; }
 h2 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
 p { margin: 0.5rem 0; }
@@ -169,16 +171,23 @@ table.bord {
 }
 table.bord th, table.bord td {
   width: 30px;
-  height: 34px;
+  height: 27px;
   padding: 0;
   text-align: center;
   font-size: 0.9rem;
   font-weight: 400;
 }
 table.bord thead th { color: var(--grijs); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; }
-table.bord tr.pars td, table.bord tr.pars th { color: var(--grijs); font-size: 0.72rem; height: 22px; }
+table.bord tr.pars td, table.bord tr.pars th { color: var(--grijs); font-size: 0.72rem; height: 19px; }
 table.bord thead tr.pars td, table.bord thead tr.pars th { border-bottom: 1px solid var(--lijn); }
 table.bord tbody tr + tr th, table.bord tbody tr + tr td { border-top: 1px solid var(--lijn); }
+/* Elke drie spelers een zwaardere lijn: houvast voor wie van een afstand meekijkt. */
+table.bord tbody tr:nth-child(3n) th, table.bord tbody tr:nth-child(3n) td {
+  border-bottom: 2px solid var(--accent);
+}
+table.bord tbody tr:nth-child(3n) + tr th, table.bord tbody tr:nth-child(3n) + tr td {
+  border-top: 0;
+}
 
 /* Vastgezette kolommen: positie, naam en de stand tegen par blijven altijd zichtbaar. */
 table.bord .pos    { position: sticky; left: 0;      width: 26px;  background: var(--vlak); z-index: 2; color: var(--grijs); font-size: 0.75rem; }

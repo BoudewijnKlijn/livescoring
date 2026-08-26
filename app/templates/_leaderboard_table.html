@@ -34,7 +34,7 @@
   <tbody>
     {% for row in rows %}
     <tr class="{% if not row.playing %}uitgevallen{% endif %}">
-      <td class="pos">{{ loop.index if row.playing else '' }}</td>
+      <td class="pos">{{ offset + loop.index if row.playing else '' }}</td>
       <td class="speler">
         {{ row.name }}{% if not row.playing %} · {{ row.status|upper }}{% endif %}
         {%- if competition.rounds|length > 1 %} · R{{ row.round_no }}{% endif %}
@@ -55,5 +55,8 @@
   </tbody>
 </table>
 </div>
-<p class="klein">Een score telt zodra speler en marker hetzelfde invulden.
-Bijgewerkt om {{ bijgewerkt }}.</p>
+<p class="klein">
+  {%- if schermen > 1 %}Speler {{ offset + 1 }}&ndash;{{ offset + rows|length }} van {{ totaal }} ·
+  volgende groep binnen een minuut · {% endif -%}
+  Bijgewerkt om {{ bijgewerkt }}.
+</p>

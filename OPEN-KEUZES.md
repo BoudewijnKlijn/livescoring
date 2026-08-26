@@ -39,27 +39,35 @@ bewuste keuze, geen vergeten onderdeel.
    terug. Rood op de kaart betekent daardoor maar één ding: speler en marker vulden iets
    anders in.
 
-4. **Links zijn na de import eenmalig zichtbaar.** Alleen de sha256-hash staat in de
+4. **Het leaderboard bladert op de servertijd, niet in de browser.** Bij meer spelers dan
+   op een scherm passen toont het bord er 25 tegelijk en gaat het elke minuut naar de
+   volgende groep. Welke groep dat is volgt uit `minuut % aantal schermen`, dus zonder
+   toestand in de browser en zonder extra verzoek: elk scherm dat dezelfde wedstrijd toont
+   laat dezelfde spelers zien. Het aantal per scherm staat in de link (`?n=40`) in plaats
+   van in de database, zodat een televisie en een telefoon allebei hun eigen maat kunnen
+   hebben en er geen kolom bij hoefde tijdens het toernooi.
+
+5. **Links zijn na de import eenmalig zichtbaar.** Alleen de sha256-hash staat in de
    database, dus een linkenoverzicht achteraf kan niet zonder de tokens op te slaan.
    In plaats daarvan: kopieer de lijst direct na de import, en ben je hem kwijt, gebruik dan
    *Nieuwe links maken*. Dat maakt verse links en raakt geen enkele score aan.
 
-5. **Roteren en wissen zijn losse acties.** Oorspronkelijk gevraagd als één actie ("nieuwe
+6. **Roteren en wissen zijn losse acties.** Oorspronkelijk gevraagd als één actie ("nieuwe
    link, oude ongeldig, scores weg"). Het geval dat dit oplost, een 3-bal die een 2-bal
    wordt, vraagt om een nieuwe marker, niet om een gewiste kaart. Beide acties vragen een
    viercijferige bevestigingscode zodra er scores staan.
 
-6. **Statussen zijn tekstkolommen met een check constraint**, geen Postgres enums. Een enum
+7. **Statussen zijn tekstkolommen met een check constraint**, geen Postgres enums. Een enum
    uitbreiden vraagt om een migratie, en die is er niet.
 
-7. **De correctieformulieren staan buiten het blok dat elke 5 seconden ververst.** Anders
+8. **De correctieformulieren staan buiten het blok dat elke 5 seconden ververst.** Anders
    typt de admin een reden in een veld dat een seconde later wordt weggegooid.
 
-8. **Eén speler per competitie, geen globale spelersidentiteit.** Wie twee competities
+9. **Eén speler per competitie, geen globale spelersidentiteit.** Wie twee competities
    speelt, is twee rijen met twee links. Een gedeelde identiteit vraagt om matchen op e-mail
    en een samenvoegprobleem bij "J. de Vries" versus "Jan de Vries".
 
-9. **Rate limit en cache op het leaderboard**: de tabel wordt maximaal eens per 3 seconden
+10. **Rate limit en cache op het leaderboard**: de tabel wordt maximaal eens per 3 seconden
    gerenderd en per IP zijn 90 verzoeken per minuut toegestaan. Bij 100 kijkers die elke 5
    seconden pollen is dat ~1 query per 3 seconden in plaats van 20 per seconde.
 

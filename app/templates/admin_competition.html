@@ -26,9 +26,22 @@
 
 <div class="kaart">
   <h2>Leaderboard</h2>
-  <p class="klein">Deel deze link met toeschouwers. Hij is openbaar voor wie hem heeft.</p>
-  <input type="text" readonly value="{{ base_url }}/l/{{ competition.leaderboard_slug }}"
-         onclick="this.select()">
+  <p class="klein">Deel deze link met toeschouwers. Hij is openbaar voor wie hem heeft.
+    Passen niet alle spelers op het scherm, dan toont het bord er 25 tegelijk en springt
+    elke minuut naar de volgende groep. Op een groot scherm kunnen er meer tegelijk.</p>
+  <label for="perscherm">Spelers per scherm</label>
+  <input id="perscherm" type="number" min="3" max="100" value="25" style="max-width:7rem"
+         oninput="bouwLink()">
+  <p></p>
+  <input id="bordlink" type="text" readonly onclick="this.select()"
+         value="{{ base_url }}/l/{{ competition.leaderboard_slug }}">
+  <script>
+    function bouwLink() {
+      var n = parseInt(document.getElementById('perscherm').value, 10);
+      var basis = "{{ base_url }}/l/{{ competition.leaderboard_slug }}";
+      document.getElementById('bordlink').value = (n && n !== 25) ? basis + '?n=' + n : basis;
+    }
+  </script>
 </div>
 
 {% for r in competition.rounds %}
