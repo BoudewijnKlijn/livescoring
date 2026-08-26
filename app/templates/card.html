@@ -38,10 +38,33 @@
 {% if not entry.locked %}<a class="knop groot" href="/me/sign">Kaart tekenen</a>{% endif %}
 
 <script>
+// Schuif naar de eerste hole die nog open staat.
 document.querySelectorAll('.scroller[data-scroll-naar]').forEach(function (s) {
   var hole = s.getAttribute('data-scroll-naar');
   var kop = s.querySelector('tr.holes th:nth-child(' + (parseInt(hole, 10) + 1) + ')');
   if (kop) { s.scrollLeft = Math.max(0, kop.offsetLeft - 90); }
+});
+
+// Een score die niet is opgeslagen, verdwijnt weer uit het vakje. Wat je ziet staat
+// in de database; blijft je invoer staan, dan is hij ook echt opgeslagen.
+document.addEventListener('DOMContentLoaded', function () {
+  htmx.config.timeout = 10000;
+});
+document.body.addEventListener('focusin', function (e) {
+  if (e.target.classList.contains('score')) {
+    e.target.dataset.opgeslagen = e.target.value;
+  }
+});
+document.body.addEventListener('htmx:beforeSwap', function (e) {
+  // De server stuurt bij een weigering de opgeslagen stand terug: die willen we tonen.
+  if (e.detail.xhr && e.detail.xhr.status === 422) { e.detail.shouldSwap = true; }
+});
+['htmx:sendError', 'htmx:timeout'].forEach(function (soort) {
+  document.body.addEventListener(soort, function (e) {
+    if (e.target.classList.contains('score')) {
+      e.target.value = e.target.dataset.opgeslagen || '';
+    }
+  });
 });
 </script>
 {% endblock %}

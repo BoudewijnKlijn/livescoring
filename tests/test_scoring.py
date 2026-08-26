@@ -191,3 +191,35 @@ def test_leaderboard_toont_alleen_scores_waar_beiden_het_eens_zijn(db, wedstrijd
     assert rijen["Jan"].total is None               # ronde loopt nog
     assert "Anne" not in rijen                      # nog niet gestart
     assert "Piet" not in rijen                      # zelf nog niets ingevuld
+
+
+def test_geweigerde_score_geeft_opgeslagen_waarde_terug(db, wedstrijd, als_speler):
+    """Een 422 bevat de stand uit de database, zodat het vakje terugspringt.
+
+    Daar leunt de kaart op: blijft je invoer staan, dan is hij opgeslagen.
+    """
+    jan = _entry_van(db, "Jan")
+    client = als_speler("Jan")
+    client.post(
+        "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "self", "strokes": 4}
+    )
+
+    geweigerd = client.post(
+        "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "self", "strokes": 99}
+    )
+
+    assert geweigerd.status_code == 422
+    assert 'value="4"' in geweigerd.text
+    assert 'value="99"' not in geweigerd.text
+
+
+def test_geweigerde_eerste_score_geeft_leeg_vakje_terug(db, wedstrijd, als_speler):
+    """Zonder eerdere score levert een weigering een leeg vakje op."""
+    jan = _entry_van(db, "Jan")
+
+    geweigerd = als_speler("Jan").post(
+        "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "self", "strokes": 0}
+    )
+
+    assert geweigerd.status_code == 422
+    assert 'value=""' in geweigerd.text
