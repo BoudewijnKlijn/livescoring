@@ -103,23 +103,29 @@ def _get_competition(db: DbSession, competition_id: int) -> Competition:
     return competition
 
 
+def _beheer(competition: Competition, **extra) -> dict:
+    """De vaste inhoud van het beheerscherm.
+
+    Eén plek, zodat een foutmelding nooit een halve pagina kan opleveren: zonder de
+    spelerslijst lijkt het alsof iedereen verdwenen is terwijl er niets is gewijzigd.
+    """
+    return {
+        "competition": competition,
+        "base_url": settings.base_url,
+        "code": confirm_code(),
+        "holes": range(1, HOLES + 1),
+        "deelnames": _deelnames(competition),
+        **extra,
+    }
+
+
 @router.get("/c/{competition_id}", response_class=HTMLResponse)
 def competition_page(
     request: Request, competition_id: int, db: DbSession, _: AdminOnly
 ) -> HTMLResponse:
     """Beheerscherm van één competitie."""
     competition = _get_competition(db, competition_id)
-    return templates.TemplateResponse(
-        request,
-        "admin_competition.html",
-        {
-            "competition": competition,
-            "base_url": settings.base_url,
-            "code": confirm_code(),
-            "holes": range(1, HOLES + 1),
-            "deelnames": _deelnames(competition),
-        },
-    )
+    return templates.TemplateResponse(request, "admin_competition.html", _beheer(competition))
 
 
 @router.post("/c/{competition_id}/import", response_class=HTMLResponse)
@@ -137,14 +143,7 @@ def do_import(
         return templates.TemplateResponse(
             request,
             "admin_competition.html",
-            {
-                "competition": competition,
-                "base_url": settings.base_url,
-                "code": confirm_code(),
-                "holes": range(1, HOLES + 1),
-                "errors": result.errors,
-                "csv_tekst": csv_tekst,
-            },
+            _beheer(competition, errors=result.errors, csv_tekst=csv_tekst),
             status_code=422,
         )
     note = (

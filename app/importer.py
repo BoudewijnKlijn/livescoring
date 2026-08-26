@@ -64,7 +64,7 @@ def parse(text: str) -> tuple[list[Row], list[str]]:
     text = text.lstrip("﻿")
     reader = csv.DictReader(io.StringIO(text))
     if reader.fieldnames is None:
-        return [], ["Het bestand is leeg."]
+        return [], ["Er stond niets in het vak. Plak eerst de regels uit je bestand."]
 
     headers = [h.strip().casefold() for h in reader.fieldnames]
     missing = [c for c in ("naam", "ronde", "flight") if c not in headers]

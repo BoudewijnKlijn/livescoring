@@ -123,3 +123,40 @@ def test_wissen_zonder_juiste_code_verandert_niets(db, wedstrijd, client):
     assert antwoord.status_code == 400
     db.expire_all()
     assert db.scalars(select(Entry)).all() != []
+
+
+def test_mislukte_import_toont_de_spelers_gewoon(db, wedstrijd, client):
+    """Een geweigerde import laat de spelerslijst staan.
+
+    Anders lijkt het alsof iedereen verdwenen is terwijl er niets is gewijzigd, en dat is
+    op een wedstrijddag precies het moment waarop iemand in paniek opnieuw gaat importeren.
+    """
+    competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    voor = len(db.scalars(select(Entry)).all())
+
+    antwoord = client.post(f"/admin/c/{competition.id}/import", data={"csv_tekst": ""})
+
+    assert antwoord.status_code == 422
+    assert "niet uitgevoerd" in antwoord.text
+    assert "Jan" in antwoord.text, "de spelerslijst hoort er nog te staan"
+    assert "Nog geen spelers" not in antwoord.text
+    db.expire_all()
+    assert len(db.scalars(select(Entry)).all()) == voor
+
+
+def test_import_met_fout_in_een_regel_wijzigt_niets(db, wedstrijd, client):
+    """Bij een fout in het bestand blijft alles zoals het was."""
+    competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    voor = len(db.scalars(select(Entry)).all())
+
+    antwoord = client.post(
+        f"/admin/c/{competition.id}/import",
+        data={"csv_tekst": "naam,ronde,flight,marker\nNieuw Iemand,1,Z,Bestaat Niet"},
+    )
+
+    assert antwoord.status_code == 422
+    assert "Jan" in antwoord.text
+    db.expire_all()
+    assert len(db.scalars(select(Entry)).all()) == voor
