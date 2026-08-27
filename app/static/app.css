@@ -26,7 +26,7 @@
 
 body {
   margin: 0;
-  padding: 0 0 3rem;
+  padding: 0 0 1rem;
   font: 400 16px/1.5 "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--tekst);
   background: var(--achtergrond);
@@ -36,7 +36,7 @@ body {
 header {
   background: var(--accent);
   color: #fff;
-  padding: 0.55rem 0.75rem;
+  padding: 0.4rem 0.75rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -301,7 +301,7 @@ table.bord {
 }
 table.bord th, table.bord td {
   width: var(--cel);
-  height: 36px;
+  height: 28px;
   padding: 0;
   text-align: center;
   font-size: 0.8rem;
@@ -312,7 +312,7 @@ table.bord tbody tr:last-child th, table.bord tbody tr:last-child td { border-bo
 
 /* Kop: holenummers op een grijze band, daaronder de pars in lichter grijs. */
 table.bord tr.holerij th {
-  height: 30px;
+  height: 24px;
   font-size: 0.7rem;
   font-weight: 500;
   color: var(--grijs);
@@ -320,7 +320,7 @@ table.bord tr.holerij th {
   letter-spacing: 0.02em;
 }
 table.bord tr.pars th, table.bord tr.pars td {
-  height: 26px;
+  height: 20px;
   font-size: 0.7rem;
   color: #999;
   background: #fcfcfc;
@@ -365,8 +365,8 @@ table.bord td.vak { background: var(--vlak); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 23px;
+  height: 23px;
   border-radius: 3px;
   font-size: 0.8rem;
   line-height: 1;
@@ -385,6 +385,7 @@ table.bord td.leeg { color: var(--grijs); font-weight: 400; }
 /* Onder de kaart: de kleursleutel links, de tijd rechts. */
 .onderrand {
   display: flex;
+  margin-bottom: 0;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;

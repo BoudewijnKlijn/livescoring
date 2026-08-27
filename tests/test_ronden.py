@@ -431,3 +431,75 @@ def test_een_gewiste_score_maakt_geen_ronde_actief(db, toernooi):
     db.expire_all()
 
     assert huidige_ronde(db, competition, None) == 1
+
+
+# --- een status uit een eerdere ronde geldt voor de hele wedstrijd ---------------------
+
+
+def test_uitvaller_blijft_uitgevallen_in_de_volgende_ronde(db, toernooi):
+    """Wie in ronde 1 op WD staat, speelt niet meer mee: ook niet op het bord van ronde 2."""
+    competition, _ = toernooi
+    _vul(db, _entry(db, "Jan", 1), 3)   # de beste ronde van het veld
+    _vul(db, _entry(db, "Piet", 1), 5)
+    _vul(db, _entry(db, "Jan", 2), 3)
+    _vul(db, _entry(db, "Piet", 2), 5)
+    jan1 = _entry(db, "Jan", 1)
+    jan1.status = "wd"
+    db.commit()
+
+    stand = leaderboard(db, competition, 2)
+
+    assert _entry(db, "Jan", 2).status == "ok", "in de database staat alleen ronde 1 op wd"
+    rijen = {r.name: r for r in stand}
+    assert rijen["Jan"].status == "wd", "maar op het bord telt hij niet meer mee"
+    assert not rijen["Jan"].playing
+    assert [r.name for r in stand] == ["Piet", "Jan"], "hij zakt naar onderen ondanks zijn score"
+
+
+def test_een_status_in_deze_ronde_wint_van_de_eerdere(db, toernooi):
+    """Zet de leiding hem later op DQ, dan is dat wat er staat."""
+    competition, _ = toernooi
+    _vul(db, _entry(db, "Jan", 1), 4)
+    _vul(db, _entry(db, "Jan", 2), 4)
+    _entry(db, "Jan", 1).status = "nr"
+    _entry(db, "Jan", 2).status = "dq"
+    db.commit()
+
+    assert _stand(db, competition, 2)["Jan"].status == "dq"
+
+
+def test_ronde_1_blijft_naar_zijn_eigen_status_kijken(db, toernooi):
+    """De overdracht loopt één kant op: ronde 2 raakt de stand van ronde 1 niet."""
+    competition, _ = toernooi
+    _vul(db, _entry(db, "Jan", 1), 4)
+    _vul(db, _entry(db, "Jan", 2), 4)
+    _entry(db, "Jan", 2).status = "wd"
+    db.commit()
+
+    assert _stand(db, competition, 1)["Jan"].status == "ok"
+    assert _stand(db, competition, 1)["Jan"].playing
+    assert _stand(db, competition, 2)["Jan"].status == "wd"
+
+
+def test_uitvaller_zonder_score_in_ronde_2_houdt_zijn_regel(db, toernooi):
+    """Zijn ronde 1 staat er nog, met de reden waarom er niets meer bijkomt."""
+    competition, _ = toernooi
+    _vul(db, _entry(db, "Jan", 1), 4)
+    _entry(db, "Jan", 1).status = "wd"
+    db.commit()
+
+    jan = _stand(db, competition, 2)["Jan"]
+
+    assert jan.status == "wd"
+    assert jan.prev_total == 72
+    assert jan.thru == 0
+
+
+def test_wie_alleen_een_status_heeft_en_verder_niets_staat_er_niet_bij(db, toernooi):
+    """Een uitvaller die nooit een score inleverde hoort niet op het bord."""
+    competition, _ = toernooi
+    _entry(db, "Jan", 1).status = "wd"
+    _vul(db, _entry(db, "Piet", 2), 4)
+    db.commit()
+
+    assert list(_stand(db, competition, 2)) == ["Piet"]

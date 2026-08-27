@@ -334,31 +334,50 @@ def eerdere_rondenummers(competition: Competition, round_no: int) -> list[int]:
     return [r.no for r in competition.rounds if r.no < round_no]
 
 
+@dataclass
+class Eerder:
+    """Wat een speler meebrengt uit de ronden vóór de getoonde ronde."""
+
+    totals: list[int | None]
+    to_par: int
+    status: str
+
+    @property
+    def gespeeld(self) -> bool:
+        """Heeft hij in een eerdere ronde een score neergezet?"""
+        return any(t is not None for t in self.totals)
+
+
 def _eerdere_ronden(
     db: Session, competition: Competition, round_no: int
-) -> dict[int, tuple[list[int | None], int]]:
-    """Per speler zijn totaal per eerdere ronde en zijn stand t.o.v. par over die ronden.
+) -> dict[int, Eerder]:
+    """Per speler zijn totaal per eerdere ronde, zijn stand t.o.v. par en zijn status.
 
     Ook hier telt alleen wat speler en marker samen hebben goedgekeurd, net als in de
-    ronde die nu loopt. Een ronde die de speler niet speelde blijft None.
+    ronde die nu loopt. Een ronde die de speler niet speelde blijft None. Wie in een eerdere
+    ronde uitviel draagt die status mee: DQ, NR en WD gelden voor de hele wedstrijd, niet
+    alleen voor de ronde waarin ze zijn gezet.
     """
     nummers = eerdere_rondenummers(competition, round_no)
     per_ronde = {r.id: r.no for r in competition.rounds if r.no < round_no}
-    gevonden: dict[int, dict[int, tuple[int, int]]] = {}
+    totalen: dict[int, dict[int, int]] = {}
+    tegen_par: dict[int, int] = {}
+    statussen: dict[int, str] = {}
     for entry in db.scalars(select(Entry).where(Entry.round_id.in_(list(per_ronde)))):
+        if entry.status != "ok":
+            statussen[entry.player_id] = entry.status
         card = build_card(entry)
         if not card.started:
             continue
-        gevonden.setdefault(entry.player_id, {})[per_ronde[entry.round_id]] = (
-            card.agreed_total,
-            card.agreed_to_par,
-        )
+        totalen.setdefault(entry.player_id, {})[per_ronde[entry.round_id]] = card.agreed_total
+        tegen_par[entry.player_id] = tegen_par.get(entry.player_id, 0) + card.agreed_to_par
     return {
-        player_id: (
-            [rondes[no][0] if no in rondes else None for no in nummers],
-            sum(to_par for _, to_par in rondes.values()),
+        player_id: Eerder(
+            totals=[totalen.get(player_id, {}).get(no) for no in nummers],
+            to_par=tegen_par.get(player_id, 0),
+            status=statussen.get(player_id, "ok"),
         )
-        for player_id, rondes in gevonden.items()
+        for player_id in set(totalen) | set(statussen)
     }
 
 
@@ -379,18 +398,18 @@ def leaderboard(
     if rnd is None:
         return []
     eerder = _eerdere_ronden(db, competition, round_no)
-    leeg: list[int | None] = [None] * len(eerdere_rondenummers(competition, round_no))
+    leeg = Eerder([None] * len(eerdere_rondenummers(competition, round_no)), 0, "ok")
     rows: list[LeaderboardRow] = []
     for entry in db.scalars(select(Entry).where(Entry.round_id == rnd.id)):
         card = build_card(entry)
-        vorig = eerder.get(entry.player_id)
-        if not card.started and vorig is None:
+        vorig = eerder.get(entry.player_id, leeg)
+        if not card.started and not vorig.gespeeld:
             continue
         rows.append(
             LeaderboardRow(
                 name=entry.player.name,
                 round_no=rnd.no,
-                status=entry.status,
+                status=entry.status if entry.status != "ok" else vorig.status,
                 holes=[
                     (r.agreed_strokes, par_klasse(r.agreed_strokes, r.par))
                     for r in card.rows
@@ -400,8 +419,8 @@ def leaderboard(
                 out=card.nine(1, 9),
                 back=card.nine(10, HOLES),
                 total=card.agreed_total if card.agreed_thru == HOLES else None,
-                earlier=vorig[0] if vorig else list(leeg),
-                prev_to_par=vorig[1] if vorig else 0,
+                earlier=list(vorig.totals),
+                prev_to_par=vorig.to_par,
             )
         )
     rows.sort(key=lambda r: (not r.playing, r.total_to_par, -r.thru, r.name))
