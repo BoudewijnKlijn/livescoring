@@ -37,6 +37,14 @@ class AppError(Exception):
         super().__init__(message)
 
 
+class LoginRequired(Exception):
+    """Geen geldige admincookie.
+
+    Geen foutpagina maar een omleiding naar het inlogscherm: wie /admin intikt wil inloggen,
+    niet lezen dat het niet mag.
+    """
+
+
 class Unauthorized(AppError):
     """Geen geldige cookie of geen recht op deze actie."""
 
@@ -108,9 +116,9 @@ def current_entry(request: Request, db: DbSession) -> Entry:
 
 
 def require_admin(request: Request) -> bool:
-    """Controleer de admincookie, of 401."""
+    """Controleer de admincookie, of stuur door naar het inlogscherm."""
     if not _load(request.cookies.get(ADMIN_COOKIE), ADMIN_MAX_AGE):
-        raise Unauthorized("Log in als wedstrijdleiding.")
+        raise LoginRequired
     return True
 
 

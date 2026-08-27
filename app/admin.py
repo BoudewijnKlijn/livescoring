@@ -132,7 +132,6 @@ def _beheer(competition: Competition, **extra) -> dict:
         "competition": competition,
         "base_url": settings.base_url,
         "code": confirm_code(),
-        "holes": range(1, HOLES + 1),
         "deelnames": _deelnames(competition),
         **extra,
     }

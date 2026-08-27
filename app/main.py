@@ -15,7 +15,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.admin import router as admin_router
-from app.auth import AppError, CurrentEntry, DbSession, Unauthorized, hash_token, login_player
+from app.auth import (
+    AppError,
+    CurrentEntry,
+    DbSession,
+    LoginRequired,
+    Unauthorized,
+    hash_token,
+    login_player,
+)
 from app.models import DEFAULT_PARS, Competition, Entry, create_all
 from app.scoring import (
     ScoreError,
@@ -57,6 +65,12 @@ async def app_error_handler(request: Request, exc: AppError) -> HTMLResponse:
     return templates.TemplateResponse(
         request, "melding.html", {"message": exc.message}, status_code=exc.status_code
     )
+
+
+@app.exception_handler(LoginRequired)
+async def login_required_handler(request: Request, exc: LoginRequired) -> RedirectResponse:
+    """Stuur een uitgelogde beheerder naar het inlogscherm."""
+    return RedirectResponse("/admin/login", status_code=303)
 
 
 @app.get("/healthz")

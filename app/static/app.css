@@ -54,26 +54,43 @@ a { color: var(--accent); }
 /* Acties die iets onomkeerbaars doen, krijgen een rode rand. */
 .kaart.gevaarlijk { border-left: 3px solid var(--rood); }
 
-/* Beheerpanelen. Dichtgeklapt is de kaart alleen zijn titelregel, dus dan geen padding
-   eromheen. <details> klapt uit zichzelf naar beneden open en er mogen er meerdere
-   tegelijk openstaan; daar is geen javascript voor nodig. */
-details.kaart { padding: 0; }
-details.kaart > summary {
+/* Beheerpanelen. Per groep één omlijnd blok met haarlijnen ertussen, zodat elf functies
+   samen op één scherm passen. <details> klapt uit zichzelf naar beneden open en er mogen er
+   meerdere tegelijk openstaan; daar is geen javascript voor nodig. */
+h2.groep {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--grijs);
+  margin: 0.8rem 0 0.25rem;
+}
+h2.groep:first-of-type { margin-top: 0.2rem; }
+.panelen {
+  background: var(--vlak);
+  border: 1px solid var(--lijn);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.panelen > .paneel + .paneel { border-top: 1px solid var(--lijn); }
+.paneel > summary {
   cursor: pointer;
-  padding: 0.6rem 0.75rem;
+  padding: 0.4rem 0.6rem;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   list-style-position: inside;
 }
-details.kaart > summary:hover { color: var(--accent); }
-details.kaart > summary .klein { font-weight: 400; }
-details.kaart[open] > summary { border-bottom: 1px solid var(--lijn); }
-details.kaart > :not(summary) { margin-left: 0.75rem; margin-right: 0.75rem; }
-details.kaart > :last-child { margin-bottom: 0.75rem; }
-details.kaart[open] > :nth-child(2) { margin-top: 0.6rem; }
-/* Ronden staan samen in één paneel, met een streep tussen de ronden. */
-.blok + .blok { border-top: 1px solid var(--lijn); margin-top: 0.6rem; padding-top: 0.6rem; }
-.blok h3 { font-size: 0.95rem; margin: 0 0 0.4rem; }
+.paneel > summary:hover { color: var(--accent); }
+.paneel > summary .klein { font-weight: 400; }
+.paneel[open] > summary { border-bottom: 1px solid var(--lijn); }
+/* Alleen de inhoud krijgt marges; dichtgeklapt is een paneel dus niet meer dan zijn regel. */
+.paneel > :not(summary) { margin-left: 0.6rem; margin-right: 0.6rem; }
+.paneel > :last-child { margin-bottom: 0.6rem; }
+.paneel[open] > summary + * { margin-top: 0.5rem; }
+/* Acties die iets onomkeerbaars doen, krijgen een rode rand. */
+.paneel.gevaarlijk { border-left: 3px solid var(--rood); }
+/* De ronden staan samen in één paneel, met een streep tussen de ronden. */
+.blok + .blok { border-top: 1px solid var(--lijn); margin-top: 0.5rem; padding-top: 0.5rem; }
+.blok h3 { font-size: 0.9rem; margin: 0 0 0.3rem; }
 .blok h3 .klein { font-weight: 400; }
 
 .knop, button, input[type="submit"] {

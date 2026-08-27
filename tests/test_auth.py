@@ -72,8 +72,16 @@ def test_geroteerd_token_geeft_401(db, wedstrijd, client):
 def test_zonder_cookie_geen_toegang(client):
     """Spelerspagina's zijn niet publiek."""
     assert client.get("/me/card").status_code == 401
-    assert client.get("/me/card").status_code == 401
-    assert client.get("/admin").status_code == 401
+
+
+def test_admin_zonder_cookie_gaat_naar_het_inlogscherm(client):
+    """Wie /admin intikt wil inloggen, niet lezen dat het niet mag."""
+    for pad in ("/admin", "/admin/c/1", "/admin/c/1/export.csv"):
+        antwoord = client.get(pad, follow_redirects=False)
+        assert antwoord.status_code == 303, pad
+        assert antwoord.headers["location"] == "/admin/login", pad
+
+    assert client.get("/admin").url.path == "/admin/login", "en volgt hij hem, dan staat hij er"
 
 
 def test_leaderboard_is_publiek_op_slug(client, wedstrijd):
@@ -270,18 +278,33 @@ def test_lege_spelerkeuze_vervangt_niet_stilzwijgend_alle_links(db, wedstrijd, c
         client.cookies.clear()
 
 
-def test_beheerpagina_toont_elke_functie_als_paneel(db, wedstrijd, client):
-    """Alles staat dichtgeklapt onder een eigen titel, zodat de admin het aanbod overziet."""
+def test_beheerpagina_groepeert_alle_functies_in_panelen(db, wedstrijd, client):
+    """Alles dichtgeklapt onder een eigen titel, gegroepeerd naar wanneer je het nodig hebt."""
     competition, _ = wedstrijd
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
 
     pagina = client.get(f"/admin/c/{competition.id}").text
 
-    titels = re.findall(r"<summary>(.*?)</summary>", pagina, re.S)
-    assert "Spelers importeren" in titels[0]
-    assert len(titels) == 11, titels
-    assert "<h2>" not in pagina, "de kopjes zijn nu de titelregels van de panelen"
-    assert "<details class=\"kaart\" open>" not in pagina, "niets staat open bij het laden"
+    groepen = re.findall(r'<h2 class="groep">(.*?)</h2>', pagina)
+    ruw = re.findall(r"<summary>(.*?)</summary>", pagina, re.S)
+    titels = [re.sub(r"<[^>]+>", "", t).strip() for t in ruw]
+    assert groepen == ["Tijdens de wedstrijd", "Opzetten en afronden", "Onomkeerbaar"]
+    assert titels[0].startswith("Spelers"), "de spelerslijst staat bovenaan"
+    assert titels[-1] == "Alle spelers en scores verwijderen", "het gevaarlijkste onderaan"
+    assert len(titels) == 12, titels
+    assert 'class="paneel gevaarlijk"' in pagina
+    assert "open>" not in pagina, "niets staat open bij het laden"
+
+
+def test_onomkeerbare_acties_staan_onder_de_dagelijkse(db, wedstrijd, client):
+    """Alles verwijderen mag niet meer verstopt zitten onder de spelerslijst."""
+    competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+
+    pagina = client.get(f"/admin/c/{competition.id}").text
+
+    assert pagina.index("Score corrigeren") < pagina.index('<h2 class="groep">Onomkeerbaar</h2>')
+    assert pagina.index('<h2 class="groep">Onomkeerbaar</h2>') < pagina.index("/wissen")
 
 
 def test_importpaneel_gaat_open_als_de_import_faalt(db, wedstrijd, client):
@@ -295,4 +318,4 @@ def test_importpaneel_gaat_open_als_de_import_faalt(db, wedstrijd, client):
     )
 
     assert antwoord.status_code == 422
-    assert '<details class="kaart" open>' in antwoord.text
+    assert '<details class="paneel" open>' in antwoord.text
