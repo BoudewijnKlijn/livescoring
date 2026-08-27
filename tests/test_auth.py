@@ -268,3 +268,31 @@ def test_lege_spelerkeuze_vervangt_niet_stilzwijgend_alle_links(db, wedstrijd, c
     for naam in ("Jan", "Piet", "Anne", "Kees"):
         assert client.get(f"/t/{tokens[naam]}", follow_redirects=False).status_code == 303
         client.cookies.clear()
+
+
+def test_beheerpagina_toont_elke_functie_als_paneel(db, wedstrijd, client):
+    """Alles staat dichtgeklapt onder een eigen titel, zodat de admin het aanbod overziet."""
+    competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+
+    pagina = client.get(f"/admin/c/{competition.id}").text
+
+    titels = re.findall(r"<summary>(.*?)</summary>", pagina, re.S)
+    assert "Spelers importeren" in titels[0]
+    assert len(titels) == 11, titels
+    assert "<h2>" not in pagina, "de kopjes zijn nu de titelregels van de panelen"
+    assert "<details class=\"kaart\" open>" not in pagina, "niets staat open bij het laden"
+
+
+def test_importpaneel_gaat_open_als_de_import_faalt(db, wedstrijd, client):
+    """Anders staat de foutmelding in beeld terwijl het geplakte bestand eronder verstopt zit."""
+    competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+
+    antwoord = client.post(
+        f"/admin/c/{competition.id}/import",
+        data={"csv_tekst": "naam,ronde,flight,starthole,marker\nJan,1,B,10,\n"},
+    )
+
+    assert antwoord.status_code == 422
+    assert '<details class="kaart" open>' in antwoord.text

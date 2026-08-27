@@ -54,6 +54,28 @@ a { color: var(--accent); }
 /* Acties die iets onomkeerbaars doen, krijgen een rode rand. */
 .kaart.gevaarlijk { border-left: 3px solid var(--rood); }
 
+/* Beheerpanelen. Dichtgeklapt is de kaart alleen zijn titelregel, dus dan geen padding
+   eromheen. <details> klapt uit zichzelf naar beneden open en er mogen er meerdere
+   tegelijk openstaan; daar is geen javascript voor nodig. */
+details.kaart { padding: 0; }
+details.kaart > summary {
+  cursor: pointer;
+  padding: 0.6rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  list-style-position: inside;
+}
+details.kaart > summary:hover { color: var(--accent); }
+details.kaart > summary .klein { font-weight: 400; }
+details.kaart[open] > summary { border-bottom: 1px solid var(--lijn); }
+details.kaart > :not(summary) { margin-left: 0.75rem; margin-right: 0.75rem; }
+details.kaart > :last-child { margin-bottom: 0.75rem; }
+details.kaart[open] > :nth-child(2) { margin-top: 0.6rem; }
+/* Ronden staan samen in één paneel, met een streep tussen de ronden. */
+.blok + .blok { border-top: 1px solid var(--lijn); margin-top: 0.6rem; padding-top: 0.6rem; }
+.blok h3 { font-size: 0.95rem; margin: 0 0 0.4rem; }
+.blok h3 .klein { font-weight: 400; }
+
 .knop, button, input[type="submit"] {
   display: inline-flex;
   align-items: center;
