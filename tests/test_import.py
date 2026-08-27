@@ -12,7 +12,8 @@ from sqlalchemy import select
 
 from app.importer import create_competition, import_csv
 from app.models import Entry, Player, Round
-from app.scoring import build_card, set_score, sign_card
+from app.scoring import build_card, sign_card
+from tests.helpers import entry_van, vul_kaart
 
 BASIS = """naam,email,ronde,flight,starthole,marker
 Jan,jan@x.nl,1,A,1,Piet
@@ -31,16 +32,6 @@ def veld(db):
     return competition
 
 
-def _entry(db, naam: str, ronde: int = 1) -> Entry:
-    db.expire_all()
-    return db.scalar(
-        select(Entry)
-        .join(Player)
-        .join(Round, Entry.round_id == Round.id)
-        .where(Player.name == naam, Round.no == ronde)
-    )
-
-
 def _foto(db) -> dict[str, tuple]:
     """Wie zit waar, met welke marker, welk token en hoeveel scores."""
     db.expire_all()
@@ -57,18 +48,12 @@ def _foto(db) -> dict[str, tuple]:
     }
 
 
-def _scoor(db, entry: Entry, holes: range, strokes: int = 4) -> None:
-    for hole in holes:
-        set_score(db, entry, entry, hole, "self", strokes)
-        set_score(db, entry.marker, entry, hole, "marker", strokes)
-
-
 # --- regel 2 en 3: het bestand wint, scores en links blijven ---------------------------
 
 
 def test_hetzelfde_bestand_nog_een_keer_verandert_niets(db, veld):
     """Een herimport van hetzelfde bestand is een lege operatie."""
-    _scoor(db, _entry(db, "Jan"), range(1, 4))
+    vul_kaart(db, entry_van(db, "Jan"), holes=3)
     voor = _foto(db)
 
     result = import_csv(db, veld, BASIS)
@@ -81,7 +66,7 @@ def test_hetzelfde_bestand_nog_een_keer_verandert_niets(db, veld):
 
 def test_verhuizing_naar_een_andere_flight_laat_link_en_scores_staan(db, veld):
     """Een speler verplaatsen raakt zijn token en zijn kaart niet."""
-    _scoor(db, _entry(db, "Jan"), range(1, 6))
+    vul_kaart(db, entry_van(db, "Jan"), holes=5)
     voor = _foto(db)["Jan"]
 
     result = import_csv(
@@ -103,8 +88,8 @@ def test_verhuizing_naar_een_andere_flight_laat_link_en_scores_staan(db, veld):
 
 def test_een_getekende_kaart_blijft_getekend(db, veld):
     """Een herimport ontgrendelt niets."""
-    jan = _entry(db, "Jan")
-    _scoor(db, jan, range(1, 19))
+    jan = entry_van(db, "Jan")
+    vul_kaart(db, jan)
     sign_card(db, jan)
 
     assert import_csv(db, veld, BASIS).ok
@@ -121,7 +106,7 @@ def test_het_bestand_wint_voor_het_e_mailadres(db, veld):
 
 def test_wat_het_bestand_niet_noemt_blijft_staan(db, veld):
     """Spelers die niet in het bestand staan houden alles wat ze hadden."""
-    _scoor(db, _entry(db, "Anne"), range(1, 4))
+    vul_kaart(db, entry_van(db, "Anne"), holes=3)
     voor = _foto(db)
 
     result = import_csv(db, veld, "naam,ronde,flight,starthole,marker\nJan,1,A,1,Piet\n")
@@ -142,8 +127,8 @@ def test_lege_markerkolom_laat_de_bestaande_marker_staan(db, veld):
 
 def test_een_nieuwe_marker_laat_de_scores_van_de_oude_staan(db, veld):
     """De oude marker heeft die holes echt gezien, dus die scores blijven geldig."""
-    jan = _entry(db, "Jan")
-    _scoor(db, jan, range(1, 4))
+    jan = entry_van(db, "Jan")
+    vul_kaart(db, jan, holes=3)
 
     result = import_csv(
         db,
@@ -155,7 +140,7 @@ def test_een_nieuwe_marker_laat_de_scores_van_de_oude_staan(db, veld):
     )
 
     assert result.ok, result.errors
-    kaart = build_card(_entry(db, "Jan"))
+    kaart = build_card(entry_van(db, "Jan"))
     assert _foto(db)["Jan"][2] == "Anne"
     assert kaart.rows[0].marker_strokes == 4
     assert kaart.agreed_thru == 3, "de holes blijven bevestigd"
@@ -281,7 +266,7 @@ def test_nieuwe_spelers_krijgen_oplopende_plekken(db, veld):
 
     assert result.ok, result.errors
     db.expire_all()
-    dirk = _entry(db, "Dirk")
+    dirk = entry_van(db, "Dirk")
     assert sorted(e.position for e in dirk.flight.entries) == [0, 1]
 
 

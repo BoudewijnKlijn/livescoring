@@ -257,10 +257,11 @@
   <p class="onder">Download dit na afloop. Dat is meteen je back-up.</p>
   <div class="rij">
     <a class="knop secundair" href="/admin/c/{{ competition.id }}/export.csv">Uitslag CSV</a>
-    <a class="knop secundair" href="/admin/c/{{ competition.id }}/audit.csv">Audit log CSV</a>
+    <a class="knop secundair" href="/admin/audit.csv">Audit log CSV</a>
   </div>
-  <p class="klein">De uitslag is een regel per speler per ronde, met alle holes. De audit log
-    bevat elke correctie en ingreep, met tijdstip en reden.</p>
+  <p class="klein">De uitslag is een regel per speler per ronde van deze wedstrijd, met alle
+    holes. De audit log bevat elke correctie en ingreep van <em>alle</em> wedstrijden, met
+    tijdstip en reden; die blijft ook staan als je hier de spelers verwijdert.</p>
 
 {% elif paneel == 'leegmaken' %}
   <h1 class="gevaar">Kaart leegmaken</h1>

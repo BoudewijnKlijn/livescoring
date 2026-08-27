@@ -66,6 +66,24 @@ def wedstrijd(db):
     return competition, tokens
 
 
+TWEE_RONDEN = """naam,email,ronde,flight,starthole,marker
+Jan,jan@x.nl,1,A,1,Piet
+Piet,piet@x.nl,1,A,1,Jan
+Jan,jan@x.nl,2,A,1,Piet
+Piet,piet@x.nl,2,A,1,Jan
+"""
+
+
+@pytest.fixture
+def toernooi(db):
+    """Twee spelers die elkaars marker zijn, in twee ronden."""
+    competition = create_competition(db, "Clubkampioenschap")
+    result = import_csv(db, competition, TWEE_RONDEN)
+    assert result.ok, result.errors
+    db.refresh(competition)
+    return competition, {(naam, ronde): token for naam, ronde, token in result.new_links}
+
+
 @pytest.fixture
 def client():
     """HTTP-client zonder ingelogde gebruiker."""

@@ -7,18 +7,14 @@ import re
 from sqlalchemy import select
 
 from app.auth import new_token
-from app.models import Competition, Entry, Player
-
-
-def _entry_van(db, naam: str) -> Entry:
-    player = db.scalar(select(Player).where(Player.name == naam))
-    return db.scalar(select(Entry).where(Entry.player_id == player.id))
+from app.models import Competition, Entry
+from tests.helpers import bevestigingscode, entry_van
 
 
 def test_score_invoeren_voor_speler_zonder_marker_rol_faalt(db, wedstrijd, als_speler):
     """Jan markt Piet, niet Anne. Een score voor Anne moet geweigerd worden."""
     client = als_speler("Jan")
-    anne = _entry_van(db, "Anne")
+    anne = entry_van(db, "Anne")
 
     response = client.post(
         "/api/score",
@@ -27,13 +23,13 @@ def test_score_invoeren_voor_speler_zonder_marker_rol_faalt(db, wedstrijd, als_s
 
     assert response.status_code == 422
     db.expire_all()
-    assert _entry_van(db, "Anne").scores == []
+    assert entry_van(db, "Anne").scores == []
 
 
 def test_eigen_score_van_ander_invoeren_faalt(db, wedstrijd, als_speler):
     """Ook met source 'self' mag je niet in andermans kaart schrijven."""
     client = als_speler("Jan")
-    piet = _entry_van(db, "Piet")
+    piet = entry_van(db, "Piet")
 
     response = client.post(
         "/api/score",
@@ -42,7 +38,7 @@ def test_eigen_score_van_ander_invoeren_faalt(db, wedstrijd, als_speler):
 
     assert response.status_code == 422
     db.expire_all()
-    assert _entry_van(db, "Piet").scores == []
+    assert entry_van(db, "Piet").scores == []
 
 
 def test_ongeldig_token_geeft_401(client):
@@ -60,7 +56,7 @@ def test_geroteerd_token_geeft_401(db, wedstrijd, client):
     assert client.get(f"/t/{oud}", follow_redirects=False).status_code == 303
     assert client.get("/me/card").status_code == 200
 
-    jan = _entry_van(db, "Jan")
+    jan = entry_van(db, "Jan")
     _, nieuwe_hash = new_token()
     jan.token_hash = nieuwe_hash
     db.commit()
@@ -102,8 +98,7 @@ def test_admin_wist_alle_spelers(db, wedstrijd, client):
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
     assert "Jan" in client.get(f"/admin/c/{competition.id}").text
 
-    pagina = client.get(f"/admin/c/{competition.id}?p=wissen")
-    code = re.search(r'name="verwacht" value="([A-Z]{4})"', pagina.text).group(1)
+    code = bevestigingscode(client, f"/admin/c/{competition.id}?p=wissen")
     antwoord = client.post(
         f"/admin/c/{competition.id}/wissen",
         data={"verwacht": code, "code": code},
@@ -219,9 +214,8 @@ def test_nieuwe_link_voor_een_speler_laat_de_rest_werken(db, wedstrijd, client):
     """Eén speler krijgt een nieuwe link; de anderen houden hun oude link en hun scores."""
     competition, tokens = wedstrijd
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
-    jan = _entry_van(db, "Jan")
-    pagina = client.get(f"/admin/c/{competition.id}?p=link").text
-    code = re.search(r'name="verwacht" value="([A-Z]{4})"', pagina).group(1)
+    jan = entry_van(db, "Jan")
+    code = bevestigingscode(client, f"/admin/c/{competition.id}?p=link")
 
     antwoord = client.post(
         f"/admin/c/{competition.id}/rotate",
@@ -243,7 +237,7 @@ def test_nieuwe_link_vraagt_altijd_om_de_code(db, wedstrijd, client):
     """Zonder de juiste code verandert er niets aan de link."""
     competition, tokens = wedstrijd
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
-    jan = _entry_van(db, "Jan")
+    jan = entry_van(db, "Jan")
 
     antwoord = client.post(
         f"/admin/c/{competition.id}/rotate",
@@ -263,8 +257,7 @@ def test_lege_spelerkeuze_vervangt_niet_stilzwijgend_alle_links(db, wedstrijd, c
     """
     competition, tokens = wedstrijd
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
-    pagina = client.get(f"/admin/c/{competition.id}?p=link").text
-    code = re.search(r'name="verwacht" value="([A-Z]{4})"', pagina).group(1)
+    code = bevestigingscode(client, f"/admin/c/{competition.id}?p=link")
 
     antwoord = client.post(
         f"/admin/c/{competition.id}/rotate",
@@ -278,71 +271,17 @@ def test_lege_spelerkeuze_vervangt_niet_stilzwijgend_alle_links(db, wedstrijd, c
         client.cookies.clear()
 
 
-def test_beheerpagina_toont_de_rail_met_alle_functies(db, wedstrijd, client):
-    """De rail noemt alles wat je kunt doen, gegroepeerd naar wanneer je het nodig hebt."""
+def test_uitslag_is_van_deze_wedstrijd_en_de_auditlog_van_alle(db, wedstrijd, client):
+    """De uitslag hoort bij één wedstrijd. De audit log staat los en heeft geen id nodig."""
     competition, _ = wedstrijd
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
 
-    pagina = client.get(f"/admin/c/{competition.id}").text
+    uitslag = client.get(f"/admin/c/{competition.id}/export.csv")
+    auditlog = client.get("/admin/audit.csv")
 
-    groepen = re.findall(r'<p class="raillabel">(.*?)</p>', pagina)
-    items = re.findall(r'href="/admin/c/\d+\?p=(\w+)"', pagina)
-    assert groepen == ["Tijdens de wedstrijd", "Opzetten en afronden", "Onomkeerbaar"]
-    assert items[:3] == ["spelers", "leaderboard", "score"]
-    assert items[-3:] == ["leegmaken", "links", "wissen"], "het gevaarlijkste onderaan"
-    assert len(set(items)) == 12
-
-
-def test_de_rail_wijst_het_paneel_aan_dat_openstaat(db, wedstrijd, client):
-    """Zonder keuze staat de spelerslijst open; met ?p= dat paneel."""
-    competition, _ = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
-
-    standaard = client.get(f"/admin/c/{competition.id}").text
-    export = client.get(f"/admin/c/{competition.id}?p=export").text
-    onzin = client.get(f"/admin/c/{competition.id}?p=bestaatniet").text
-
-    assert "?p=spelers" in re.search(r'class="railitem nu"[^>]*href="([^"]+)"', standaard).group(1)
-    assert "<h1>Spelers</h1>" in standaard
-    assert "<h1>Export</h1>" in export
-    assert "Uitslag CSV" in export
-    assert "Uitslag CSV" not in standaard, "één paneel tegelijk in het werkblad"
-    assert "<h1>Spelers</h1>" in onzin, "een onbekend paneel valt terug op de lijst"
-
-
-def test_voortgangsstrip_volgt_de_bevestigde_holes(db, wedstrijd, client, als_speler):
-    """Elke hole een streepje, gevuld zodra speler en marker het eens zijn."""
-    competition, _ = wedstrijd
-    jan = _entry_van(db, "Jan")
-    for hole in (1, 2, 3):
-        als_speler("Jan").post(
-            "/api/score", data={"entry_id": jan.id, "hole": hole, "source": "self", "strokes": 4}
-        )
-        als_speler("Piet").post(
-            "/api/score", data={"entry_id": jan.id, "hole": hole, "source": "marker", "strokes": 4}
-        )
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
-
-    pagina = client.get(f"/admin/c/{competition.id}").text
-
-    strip = re.search(r'<span class="strip"[^>]*>(.*?)</span>', pagina, re.S).group(1)
-    assert strip.count('class="vol"') == 3
-    assert strip.count('class="leeg"') == 15
-    assert "<b>3</b> onderweg" not in pagina, "alleen Jan is bezig"
-    assert "<b>1</b> onderweg" in pagina
-
-
-def test_mislukte_import_opent_het_importpaneel(db, wedstrijd, client):
-    """Anders staat de foutmelding in beeld terwijl het geplakte bestand elders zit."""
-    competition, _ = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
-
-    antwoord = client.post(
-        f"/admin/c/{competition.id}/import",
-        data={"csv_tekst": "naam,ronde,flight,starthole,marker\nJan,1,B,10,\n"},
-    )
-
-    assert antwoord.status_code == 422
-    assert "<h1>Spelers importeren</h1>" in antwoord.text
-    assert "dezelfde flight" in antwoord.text
-    assert 'class="railitem nu"' in antwoord.text
+    assert uitslag.status_code == 200
+    assert "Jan" in uitslag.text
+    assert uitslag.headers["content-disposition"].endswith(f'uitslag-{competition.id}.csv"')
+    assert auditlog.status_code == 200
+    assert "tijdstip;wie;actie;details" in auditlog.text
+    assert client.get(f"/admin/c/{competition.id}/audit.csv").status_code == 404

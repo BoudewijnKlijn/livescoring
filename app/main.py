@@ -24,6 +24,7 @@ from app.auth import (
     hash_token,
     login_player,
 )
+from app.export import router as export_router
 from app.models import DEFAULT_PARS, Competition, Entry, create_all
 from app.scoring import (
     ScoreError,
@@ -48,6 +49,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Live scoring", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(admin_router)
+app.include_router(export_router)
 
 
 @app.middleware("http")

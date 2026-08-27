@@ -1,17 +1,16 @@
-"""Adminroutes: import, spelerslijst, links, correcties en export.
+"""Adminroutes: het beheerscherm, de import, de links en de correcties.
 
 De admin is de enige die de invoer van een ander mag overschrijven, een kaart mag
 ontgrendelen en een link mag vervangen. Elke ingreep gaat naar de audit log.
+De downloads staan in `app.export`; dat is het enige hier dat niets wijzigt.
 """
 
 from __future__ import annotations
 
-import csv
-import io
 import secrets
 
 from fastapi import APIRouter, Form, Request, Response
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
@@ -26,7 +25,7 @@ from app.auth import (
 )
 from app.config import settings
 from app.importer import create_competition, import_csv
-from app.models import HOLES, AuditLog, Competition, Entry, Flight, HoleScore, Round, now
+from app.models import HOLES, Competition, Entry, Flight, HoleScore, Round, now
 from app.scoring import build_card, log
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -101,7 +100,7 @@ def index(request: Request, db: DbSession, _: AdminOnly) -> HTMLResponse:
 @router.post("/c/{competition_id}/verbergen")
 def verbergen(competition_id: int, db: DbSession, _: AdminOnly, terug: str = Form("")) -> Response:
     """Zet een wedstrijd op verborgen of weer terug. Er wordt niets verwijderd."""
-    competition = _get_competition(db, competition_id)
+    competition = get_competition(db, competition_id)
     competition.status = "live" if terug else "closed"
     log(db, "admin", "verbergen", competition=competition.id, status=competition.status)
     db.commit()
@@ -115,7 +114,8 @@ def new_competition(db: DbSession, _: AdminOnly, naam: str = Form(...)) -> Respo
     return RedirectResponse(f"/admin/c/{competition.id}", status_code=303)
 
 
-def _get_competition(db: DbSession, competition_id: int) -> Competition:
+def get_competition(db: DbSession, competition_id: int) -> Competition:
+    """Zoek een wedstrijd op, of geef een nette 404. Ook gebruikt door `app.export`."""
     competition = db.get(Competition, competition_id)
     if competition is None:
         raise AppError("Deze competitie bestaat niet.", 404)
@@ -161,7 +161,7 @@ def competition_page(
     request: Request, competition_id: int, db: DbSession, _: AdminOnly, p: str = "spelers"
 ) -> HTMLResponse:
     """Beheerscherm van één competitie. `p` kiest het paneel dat rechts opengaat."""
-    competition = _get_competition(db, competition_id)
+    competition = get_competition(db, competition_id)
     return templates.TemplateResponse(
         request, "admin_competition.html", _beheer(competition, p)
     )
@@ -176,7 +176,7 @@ def do_import(
     csv_tekst: str = Form(""),
 ) -> HTMLResponse:
     """Importeer spelers, flights en markers uit geplakte CSV."""
-    competition = _get_competition(db, competition_id)
+    competition = get_competition(db, competition_id)
     result = import_csv(db, competition, csv_tekst)
     if not result.ok:
         return templates.TemplateResponse(
@@ -321,7 +321,7 @@ def rotate_scope(
     verwacht: str = Form(""),
 ) -> HTMLResponse:
     """Maak nieuwe links voor een speler, een flight of de hele competitie."""
-    competition = _get_competition(db, competition_id)
+    competition = get_competition(db, competition_id)
     # Elke keuze wijst zichzelf aan. Een lege keuze is een fout, nooit stilzwijgend
     # "dan maar iedereen": dat kost negenendertig spelers hun link om er één te helpen.
     if scope == "entry":
@@ -388,7 +388,7 @@ def wis_spelers(
     Bedoeld om opnieuw te beginnen met een verbeterd CSV-bestand. De competitie zelf en de
     leaderboardlink blijven bestaan.
     """
-    competition = _get_competition(db, competition_id)
+    competition = get_competition(db, competition_id)
     _check_code(code, verwacht)
     aantal = sum(len(rnd.entries) for rnd in competition.rounds)
     for rnd in competition.rounds:
@@ -402,61 +402,3 @@ def wis_spelers(
     log(db, "admin", "wis_spelers", competition=competition.id, deelnames=aantal)
     db.commit()
     return RedirectResponse(f"/admin/c/{competition_id}", status_code=303)
-
-
-@router.get("/c/{competition_id}/export.csv")
-def export_csv(competition_id: int, db: DbSession, _: AdminOnly) -> StreamingResponse:
-    """Alle kaarten als CSV: een regel per speler per ronde."""
-    competition = _get_competition(db, competition_id)
-    buffer = io.StringIO()
-    writer = csv.writer(buffer, delimiter=";")
-    writer.writerow(
-        ["naam", "email", "ronde", "flight", "starthole"]
-        + [f"hole{h}" for h in range(1, HOLES + 1)]
-        + ["totaal", "tov_par", "status", "getekend", "tijdstip", "conflicten"]
-    )
-    for rnd in competition.rounds:
-        for entry in sorted(rnd.entries, key=lambda e: e.player.name):
-            card = build_card(entry)
-            writer.writerow(
-                [
-                    entry.player.name,
-                    entry.player.email or "",
-                    rnd.no,
-                    entry.flight.name,
-                    entry.flight.start_hole,
-                ]
-                + [r.self_strokes if r.self_strokes is not None else "" for r in card.rows]
-                + [
-                    card.total,
-                    card.to_par,
-                    entry.status,
-                    "ja" if entry.signed_at else "nee",
-                    entry.signed_at.isoformat(timespec="seconds") if entry.signed_at else "",
-                    " ".join(str(h) for h in card.conflicts),
-                ]
-            )
-    buffer.seek(0)
-    filename = f"uitslag-{competition.id}.csv"
-    return StreamingResponse(
-        iter([buffer.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@router.get("/c/{competition_id}/audit.csv")
-def export_audit(competition_id: int, db: DbSession, _: AdminOnly) -> StreamingResponse:
-    """De audit log als CSV: alle correcties en ingrepen."""
-    rows = db.scalars(select(AuditLog).order_by(AuditLog.at)).all()
-    buffer = io.StringIO()
-    writer = csv.writer(buffer, delimiter=";")
-    writer.writerow(["tijdstip", "wie", "actie", "details"])
-    for row in rows:
-        writer.writerow([row.at.isoformat(timespec="seconds"), row.actor, row.action, row.detail])
-    buffer.seek(0)
-    return StreamingResponse(
-        iter([buffer.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="auditlog.csv"'},
-    )

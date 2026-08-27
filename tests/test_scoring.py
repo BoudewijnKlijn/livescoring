@@ -2,20 +2,14 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
-
-from app.models import DEFAULT_PARS, HOLES, Entry, Player
+from app.models import DEFAULT_PARS, HOLES
 from app.scoring import build_card
-
-
-def _entry_van(db, naam: str) -> Entry:
-    player = db.scalar(select(Player).where(Player.name == naam))
-    return db.scalar(select(Entry).where(Entry.player_id == player.id))
+from tests.helpers import entry_van
 
 
 def _vul_kaart(als_speler, db, eigen: str, marker: str, strokes: int = 4, holes: int = 18):
     """Vul een kaart volledig: de speler zelf en zijn marker voeren dezelfde scores in."""
-    doel = _entry_van(db, eigen)
+    doel = entry_van(db, eigen)
     client = als_speler(eigen)
     for hole in range(1, holes + 1):
         client.post(
@@ -34,7 +28,7 @@ def _vul_kaart(als_speler, db, eigen: str, marker: str, strokes: int = 4, holes:
 def test_score_opslaan_en_teruglezen(db, wedstrijd, als_speler):
     """Een ingevoerde score staat in de database en op het invoerscherm."""
     client = als_speler("Jan")
-    jan = _entry_van(db, "Jan")
+    jan = entry_van(db, "Jan")
 
     response = client.post(
         "/api/score", data={"entry_id": jan.id, "hole": 3, "source": "self", "strokes": 5}
@@ -42,7 +36,7 @@ def test_score_opslaan_en_teruglezen(db, wedstrijd, als_speler):
 
     assert response.status_code == 200
     db.expire_all()
-    kaart = build_card(_entry_van(db, "Jan"))
+    kaart = build_card(entry_van(db, "Jan"))
     assert kaart.rows[2].self_strokes == 5
     assert kaart.total == 5
     assert kaart.thru == 1
@@ -51,7 +45,7 @@ def test_score_opslaan_en_teruglezen(db, wedstrijd, als_speler):
 
 def test_conflict_tussen_speler_en_marker(db, wedstrijd, als_speler):
     """Verschillende invoer voor dezelfde hole levert een conflict op."""
-    jan = _entry_van(db, "Jan")
+    jan = entry_van(db, "Jan")
     als_speler("Jan").post(
         "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "self", "strokes": 4}
     )
@@ -62,14 +56,14 @@ def test_conflict_tussen_speler_en_marker(db, wedstrijd, als_speler):
     assert response.status_code == 200
     assert "conflict" in response.text
     db.expire_all()
-    kaart = build_card(_entry_van(db, "Jan"))
+    kaart = build_card(entry_van(db, "Jan"))
     assert kaart.conflicts == [1]
     assert not kaart.signable
 
 
 def test_gelijke_invoer_is_geen_conflict(db, wedstrijd, als_speler):
     """Dezelfde score van beide kanten is akkoord."""
-    jan = _entry_van(db, "Jan")
+    jan = entry_van(db, "Jan")
     als_speler("Jan").post(
         "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "self", "strokes": 4}
     )
@@ -78,7 +72,7 @@ def test_gelijke_invoer_is_geen_conflict(db, wedstrijd, als_speler):
     )
 
     db.expire_all()
-    kaart = build_card(_entry_van(db, "Jan"))
+    kaart = build_card(entry_van(db, "Jan"))
     assert kaart.conflicts == []
     assert kaart.rows[0].agreed
 
@@ -86,7 +80,7 @@ def test_gelijke_invoer_is_geen_conflict(db, wedstrijd, als_speler):
 def test_tekenen_faalt_bij_conflict(db, wedstrijd, als_speler):
     """Een openstaand verschil blokkeert de handtekening."""
     _vul_kaart(als_speler, db, "Jan", "Piet")
-    jan = _entry_van(db, "Jan")
+    jan = entry_van(db, "Jan")
     als_speler("Piet").post(
         "/api/score", data={"entry_id": jan.id, "hole": 7, "source": "marker", "strokes": 9}
     )
@@ -97,8 +91,8 @@ def test_tekenen_faalt_bij_conflict(db, wedstrijd, als_speler):
     assert response.status_code == 422
     assert "verschil" in response.text
     db.expire_all()
-    assert _entry_van(db, "Jan").signed_at is None
-    assert not _entry_van(db, "Jan").locked
+    assert entry_van(db, "Jan").signed_at is None
+    assert not entry_van(db, "Jan").locked
 
 
 def test_tekenen_faalt_bij_ontbrekende_hole(db, wedstrijd, als_speler):
@@ -111,7 +105,7 @@ def test_tekenen_faalt_bij_ontbrekende_hole(db, wedstrijd, als_speler):
     assert response.status_code == 422
     assert "niet alle holes" in response.text
     db.expire_all()
-    assert _entry_van(db, "Jan").signed_at is None
+    assert entry_van(db, "Jan").signed_at is None
 
 
 def test_kaart_is_vergrendeld_na_tekenen(db, wedstrijd, als_speler):
@@ -123,7 +117,7 @@ def test_kaart_is_vergrendeld_na_tekenen(db, wedstrijd, als_speler):
     assert response.status_code == 303
 
     db.expire_all()
-    ververst = _entry_van(db, "Jan")
+    ververst = entry_van(db, "Jan")
     assert ververst.signed_at is not None
     assert ververst.locked
 
@@ -132,7 +126,7 @@ def test_kaart_is_vergrendeld_na_tekenen(db, wedstrijd, als_speler):
     )
     assert daarna.status_code == 422
     db.expire_all()
-    assert build_card(_entry_van(db, "Jan")).rows[0].self_strokes == 4
+    assert build_card(entry_van(db, "Jan")).rows[0].self_strokes == 4
 
 
 def test_tekenen_zonder_vinkje_doet_niets(db, wedstrijd, als_speler):
@@ -143,12 +137,12 @@ def test_tekenen_zonder_vinkje_doet_niets(db, wedstrijd, als_speler):
 
     assert response.status_code == 422
     db.expire_all()
-    assert not _entry_van(db, "Jan").locked
+    assert not entry_van(db, "Jan").locked
 
 
 def test_onmogelijke_score_wordt_geweigerd(db, wedstrijd, als_speler):
     """Nul slagen of 21 slagen slaat niemand op."""
-    jan = _entry_van(db, "Jan")
+    jan = entry_van(db, "Jan")
     client = als_speler("Jan")
 
     for waarde in (0, 21):
@@ -159,7 +153,7 @@ def test_onmogelijke_score_wordt_geweigerd(db, wedstrijd, als_speler):
         assert response.status_code == 422
 
     db.expire_all()
-    assert _entry_van(db, "Jan").scores == []
+    assert entry_van(db, "Jan").scores == []
 
 
 def test_leaderboard_toont_alleen_scores_waar_beiden_het_eens_zijn(db, wedstrijd, als_speler):
@@ -167,7 +161,7 @@ def test_leaderboard_toont_alleen_scores_waar_beiden_het_eens_zijn(db, wedstrijd
     from app.scoring import leaderboard
 
     competition, _ = wedstrijd
-    jan = _entry_van(db, "Jan")
+    jan = entry_van(db, "Jan")
     als_speler("Jan").post(
         "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "self", "strokes": 3}
     )
@@ -198,7 +192,7 @@ def test_geweigerde_score_geeft_opgeslagen_waarde_terug(db, wedstrijd, als_spele
 
     Daar leunt de kaart op: blijft je invoer staan, dan is hij opgeslagen.
     """
-    jan = _entry_van(db, "Jan")
+    jan = entry_van(db, "Jan")
     client = als_speler("Jan")
     client.post(
         "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "self", "strokes": 4}
@@ -215,7 +209,7 @@ def test_geweigerde_score_geeft_opgeslagen_waarde_terug(db, wedstrijd, als_spele
 
 def test_geweigerde_eerste_score_geeft_leeg_vakje_terug(db, wedstrijd, als_speler):
     """Zonder eerdere score levert een weigering een leeg vakje op."""
-    jan = _entry_van(db, "Jan")
+    jan = entry_van(db, "Jan")
 
     geweigerd = als_speler("Jan").post(
         "/api/score", data={"entry_id": jan.id, "hole": 1, "source": "self", "strokes": 0}
@@ -227,6 +221,6 @@ def test_geweigerde_eerste_score_geeft_leeg_vakje_terug(db, wedstrijd, als_spele
 
 def test_nieuwe_ronde_krijgt_de_pars_van_de_baan(db, wedstrijd):
     """Een geïmporteerde ronde staat meteen op de pars van de thuisbaan."""
-    assert _entry_van(db, "Jan").round.pars == DEFAULT_PARS
+    assert entry_van(db, "Jan").round.pars == DEFAULT_PARS
     assert sum(DEFAULT_PARS) == 72
     assert len(DEFAULT_PARS) == HOLES
