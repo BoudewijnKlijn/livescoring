@@ -147,7 +147,11 @@ class Entry(Base):
     round: Mapped[Round] = relationship(back_populates="entries")
     player: Mapped[Player] = relationship(back_populates="entries")
     flight: Mapped[Flight] = relationship(back_populates="entries")
-    marker: Mapped[Entry | None] = relationship(remote_side=[id], foreign_keys=[marker_entry_id])
+    # post_update: twee spelers markeren elkaar, dus de rijen wijzen naar elkaar. Zonder dit
+    # kan SQLAlchemy die twee updates niet op volgorde zetten en klapt de flush.
+    marker: Mapped[Entry | None] = relationship(
+        remote_side=[id], foreign_keys=[marker_entry_id], post_update=True
+    )
     scores: Mapped[list[HoleScore]] = relationship(
         back_populates="entry",
         cascade="all, delete-orphan",

@@ -267,8 +267,9 @@ def par_klasse(strokes: int | None, par: int) -> str:
 class LeaderboardRow:
     """Eén speler in één ronde op het leaderboard.
 
-    De velden zonder `prev` gaan over de getoonde ronde. `prev_total` en `prev_to_par` zijn
-    het opgetelde resultaat van alle eerdere ronden; in ronde 1 blijven ze leeg.
+    De velden zonder `prev` gaan over de getoonde ronde. `earlier` is het totaal van elke
+    eerdere ronde op volgorde, met None voor een ronde die deze speler niet speelde; die
+    lijst is voor iedereen even lang, zodat de kolommen op het bord uitlijnen.
     """
 
     name: str
@@ -280,13 +281,19 @@ class LeaderboardRow:
     out: int | None
     back: int | None
     total: int | None
-    prev_total: int | None = None
+    earlier: list[int | None] = field(default_factory=list)
     prev_to_par: int = 0
 
     @property
     def playing(self) -> bool:
         """Telt deze speler mee in de rangschikking?"""
         return self.status == "ok"
+
+    @property
+    def prev_total(self) -> int | None:
+        """Slagen uit alle eerdere ronden samen, of None als de speler er geen speelde."""
+        bekend = [t for t in self.earlier if t is not None]
+        return sum(bekend) if bekend else None
 
     @property
     def total_to_par(self) -> int:
@@ -322,25 +329,37 @@ def huidige_ronde(db: Session, competition: Competition, keuze: int | None = Non
     return laatste or min(nos)
 
 
+def eerdere_rondenummers(competition: Competition, round_no: int) -> list[int]:
+    """De ronden vóór deze, op volgorde. Bepaalt de kolommen en hun volgorde op het bord."""
+    return [r.no for r in competition.rounds if r.no < round_no]
+
+
 def _eerdere_ronden(
     db: Session, competition: Competition, round_no: int
-) -> dict[int, tuple[int, int]]:
-    """Per speler het totaal en de stand t.o.v. par uit alle ronden vóór `round_no`.
+) -> dict[int, tuple[list[int | None], int]]:
+    """Per speler zijn totaal per eerdere ronde en zijn stand t.o.v. par over die ronden.
 
     Ook hier telt alleen wat speler en marker samen hebben goedgekeurd, net als in de
-    ronde die nu loopt. Wie een eerdere ronde niet speelde staat er niet in.
+    ronde die nu loopt. Een ronde die de speler niet speelde blijft None.
     """
-    opgeteld: dict[int, tuple[int, int]] = {}
-    eerder = select(Round.id).where(
-        Round.competition_id == competition.id, Round.no < round_no
-    )
-    for entry in db.scalars(select(Entry).where(Entry.round_id.in_(eerder))):
+    nummers = eerdere_rondenummers(competition, round_no)
+    per_ronde = {r.id: r.no for r in competition.rounds if r.no < round_no}
+    gevonden: dict[int, dict[int, tuple[int, int]]] = {}
+    for entry in db.scalars(select(Entry).where(Entry.round_id.in_(list(per_ronde)))):
         card = build_card(entry)
         if not card.started:
             continue
-        total, to_par = opgeteld.get(entry.player_id, (0, 0))
-        opgeteld[entry.player_id] = (total + card.agreed_total, to_par + card.agreed_to_par)
-    return opgeteld
+        gevonden.setdefault(entry.player_id, {})[per_ronde[entry.round_id]] = (
+            card.agreed_total,
+            card.agreed_to_par,
+        )
+    return {
+        player_id: (
+            [rondes[no][0] if no in rondes else None for no in nummers],
+            sum(to_par for _, to_par in rondes.values()),
+        )
+        for player_id, rondes in gevonden.items()
+    }
 
 
 def leaderboard(
@@ -360,6 +379,7 @@ def leaderboard(
     if rnd is None:
         return []
     eerder = _eerdere_ronden(db, competition, round_no)
+    leeg: list[int | None] = [None] * len(eerdere_rondenummers(competition, round_no))
     rows: list[LeaderboardRow] = []
     for entry in db.scalars(select(Entry).where(Entry.round_id == rnd.id)):
         card = build_card(entry)
@@ -380,7 +400,7 @@ def leaderboard(
                 out=card.nine(1, 9),
                 back=card.nine(10, HOLES),
                 total=card.agreed_total if card.agreed_thru == HOLES else None,
-                prev_total=vorig[0] if vorig else None,
+                earlier=vorig[0] if vorig else list(leeg),
                 prev_to_par=vorig[1] if vorig else 0,
             )
         )

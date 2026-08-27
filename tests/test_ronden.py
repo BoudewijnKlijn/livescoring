@@ -7,6 +7,8 @@ bord toont één ronde tegelijk, vanaf ronde 2 met het resultaat van de eerdere 
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from sqlalchemy import select
 
@@ -302,23 +304,66 @@ def test_competitie_zonder_ronden_valt_terug_op_een(db):
 # --- de pagina -------------------------------------------------------------------------
 
 
-def test_extra_kolommen_alleen_vanaf_ronde_2(db, toernooi, client):
-    """Ronde 1 houdt zijn oude kolommen, ronde 2 krijgt er twee bij."""
+def _kolommen(html: str) -> list[str]:
+    """De koppen van de tabel, op volgorde."""
+    kop = html[html.index("<thead>") : html.index("</tr>", html.index("<thead>"))]
+    return [" ".join(c.split()) for c in re.findall(r"<th\b[^>]*>(.*?)</th>", kop, re.S)]
+
+
+def test_ronde_1_houdt_de_oude_kolommen(db, toernooi, client):
+    """Bij één ronde staat er achter de holes alleen het totaal."""
+    competition, _ = toernooi
+    _vul(db, _entry(db, "Jan", 1), 4)
+
+    kolommen = _kolommen(client.get(f"/l/{competition.leaderboard_slug}?r=1").text)
+
+    assert kolommen[:3] == ["", "Speler", "+/-"]
+    assert kolommen[-3:] == ["18", "In", "Tot"]
+    assert "Totaal" not in kolommen
+    assert "R1" not in kolommen
+
+
+def test_totalen_per_ronde_staan_achter_de_holes(db, toernooi, client):
+    """Ronde 2: +/-, dan de holes met Out en In, dan R1, R2 en het totaal."""
     competition, _ = toernooi
     _vul(db, _entry(db, "Jan", 1), 4)
     _vul(db, _entry(db, "Jan", 2), 5)
-    slug = competition.leaderboard_slug
 
-    ronde1 = client.get(f"/l/{slug}?r=1").text
-    ronde2 = client.get(f"/l/{slug}?r=2").text
+    tekst = client.get(f"/l/{competition.leaderboard_slug}?r=2").text
+    kolommen = _kolommen(tekst)
 
-    assert "Vorig" not in ronde1
-    assert "Totaal" not in ronde1
-    assert ">72<" in ronde1
-    assert "Vorig" in ronde2
-    assert "Totaal" in ronde2
-    assert ">162<" in ronde2, "het totaal over beide ronden"
-    assert ">72<" in ronde2, "het resultaat van ronde 1"
+    assert kolommen[:3] == ["", "Speler", "+/-"]
+    assert kolommen[-5:] == ["18", "In", "R1", "R2", "Totaal"]
+    assert ">72<" in tekst, "het resultaat van ronde 1"
+    assert ">90<" in tekst, "de ronde van vandaag"
+    assert ">162<" in tekst, "beide ronden samen"
+
+
+def test_elke_ronde_een_eigen_kolom(db, toernooi, client):
+    """Bij drie ronden staan R1, R2 en R3 los van elkaar op het bord."""
+    competition, _ = toernooi
+    import_csv(
+        db, competition, "naam,ronde,flight,starthole,marker\nJan,3,A,1,Piet\nPiet,3,A,1,Jan\n"
+    )
+    db.refresh(competition)
+    _vul(db, _entry(db, "Jan", 1), 4)
+    _vul(db, _entry(db, "Jan", 3), 3)
+
+    kolommen = _kolommen(client.get(f"/l/{competition.leaderboard_slug}?r=3").text)
+
+    assert kolommen[-5:] == ["In", "R1", "R2", "R3", "Totaal"]
+
+
+def test_parregel_telt_per_ronde_op(db, toernooi, client):
+    """Onder elke rondekolom staat de par van die ronde, en achteraan de par van alles."""
+    competition, _ = toernooi
+    _vul(db, _entry(db, "Jan", 1), 4)
+    _vul(db, _entry(db, "Jan", 2), 4)
+
+    tekst = client.get(f"/l/{competition.leaderboard_slug}?r=2").text
+    parregel = tekst[tekst.index('<tr class="pars">') : tekst.index("</thead>")]
+
+    assert re.findall(r'<td class="som">(\d*)</td>', parregel)[-3:] == ["72", "72", "144"]
 
 
 def test_pagina_haalt_de_tabel_van_dezelfde_ronde_op(db, toernooi, client):
@@ -343,8 +388,8 @@ def test_tabelcache_houdt_de_ronden_uit_elkaar(db, toernooi, client):
     daarna = client.get(f"/l/{slug}/table?r=2").text
     nogmaals = client.get(f"/l/{slug}/table?r=1").text
 
-    assert "Vorig" not in eerst
-    assert "Vorig" in daarna
+    assert "Totaal" not in eerst
+    assert "Totaal" in daarna
     assert nogmaals == eerst, "dezelfde ronde komt wel uit de cache"
 
 

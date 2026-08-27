@@ -15,8 +15,12 @@
 <div class="kaart">
   <h2>Spelers importeren</h2>
   <p class="klein">Eén regel per speler per ronde. Kolommen:
-    <code>naam,email,ronde,flight,starthole,marker</code>. Starthole is 1 of 10.
-    Herimporteren voegt toe en werkt flights bij, maar verwijdert nooit scores.</p>
+    <code>naam,email,ronde,flight,starthole,marker</code>. Starthole is 1 of 10.</p>
+  <p class="klein">Opnieuw importeren mag. Het bestand wint voor flight, starthole, marker en
+    e-mail; wat er niet in staat blijft zoals het was. Scores en links blijven altijd staan,
+    ook op een getekende kaart. Na afloop moet elke speler precies één marker hebben, uit
+    dezelfde flight, en mag niemand de marker van twee spelers zijn. Klopt dat niet, dan gaat
+    de hele import niet door en zegt de melding wat eraan te doen is.</p>
   <form method="post" action="/admin/c/{{ competition.id }}/import">
     <textarea name="csv_tekst" placeholder="naam,email,ronde,flight,starthole,marker&#10;Jan de Vries,jan@x.nl,1,A,1,Piet Bakker&#10;Piet Bakker,piet@x.nl,1,A,1,Jan de Vries">{{ csv_tekst or '' }}</textarea>
     <button class="knop groot" type="submit">Importeren</button>

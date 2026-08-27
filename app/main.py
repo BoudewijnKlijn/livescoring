@@ -20,6 +20,7 @@ from app.models import DEFAULT_PARS, Competition, Entry, create_all
 from app.scoring import (
     ScoreError,
     build_card,
+    eerdere_rondenummers,
     huidige_ronde,
     leaderboard,
     set_score,
@@ -263,12 +264,16 @@ def _bord(db: Session, competition: Competition, per_scherm: int, ronde: int) ->
     """Alles wat de leaderboardtabel nodig heeft, inclusief het juiste stuk van de stand."""
     alle = leaderboard(db, competition, ronde)
     rijen, start, schermen = _blader(alle, per_scherm)
+    pars = _pars(competition, ronde)
+    eerder = [(no, sum(_pars(competition, no))) for no in eerdere_rondenummers(competition, ronde)]
     return {
         "rows": rijen,
         "offset": start,
         "totaal": len(alle),
         "schermen": schermen,
-        "pars": _pars(competition, ronde),
+        "pars": pars,
         "ronde": ronde,
+        "eerdere": eerder,
+        "par_totaal": sum(pars) + sum(par for _, par in eerder),
         "bijgewerkt": _klok(),
     }

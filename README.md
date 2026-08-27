@@ -46,10 +46,29 @@ Jan de Vries,jan@x.nl,1,A,1,Piet Bakker
 Piet Bakker,piet@x.nl,1,A,1,Jan de Vries
 ```
 
-`starthole` is 1 of 10 en geldt voor de hele flight. `marker` is de naam van iemand anders in
-dezelfde flight en ronde. Het hele bestand wordt eerst gecontroleerd: bij één fout wordt er
-niets geïmporteerd. Opnieuw importeren voegt toe en werkt flights bij, maar verwijdert nooit
-spelers of scores.
+`starthole` is 1 of 10 en geldt voor de hele flight, dus ook voor spelers uit die flight die
+niet in het bestand staan. `marker` is verplicht en is de naam van iemand anders in dezelfde
+flight en ronde. Twee spelers die elkaar markeren mag, en een kring van drie ook.
+
+Bij één fout wordt er niets geïmporteerd. Opnieuw importeren mag, en gaat zo:
+
+- Een speler wordt herkend aan zijn naam, ongeacht hoofdletters en dubbele spaties. Een
+  andere schrijfwijze is een andere speler.
+- Het bestand wint voor wat het zegt: flight, starthole, marker en e-mail volgen het bestand.
+  Wat het bestand niet noemt blijft zoals het was, tot en met spelers die er niet in staan en
+  een lege markerkolom.
+- Scores en persoonlijke links blijven altijd staan, ook bij een verhuizing, bij een nieuwe
+  marker en op een getekende kaart. Die blijft ook getekend.
+- Na afloop heeft elke speler precies één marker, zit die marker in dezelfde ronde en
+  flight, en markt niemand meer dan één speler. Klopt dat niet, dan gaat de hele import niet
+  door en noemt de melding de speler en de flight, zodat je het bestand kunt verbeteren. Dat
+  is met opzet streng: anders blijven er spelers achter die niemand kan bevestigen en die
+  dus nooit kunnen tekenen. Hierdoor valt een verkeerd gespelde naam meteen op, want die
+  pikt de marker van de goed gespelde speler in.
+- Een marker die al in het systeem staat telt mee, ook als hij niet in dit bestand staat. Zo
+  kun je één flight opnieuw aanleveren zonder de rest erbij te plakken.
+- Wisselt een speler van marker terwijl de oude marker al scores schreef, dan blijven die
+  scores staan: die holes zijn echt samen gelopen. De nieuwe marker kan ze overschrijven.
 
 ## Deployen (Render + Supabase, gratis)
 
