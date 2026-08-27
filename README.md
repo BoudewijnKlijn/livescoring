@@ -77,6 +77,11 @@ dezelfde `DATABASE_URL`.
    `?n=40` voor een grote televisie, `?n=10` voor een telefoon. De adminpagina bouwt die
    link voor je. Alle schermen die dezelfde wedstrijd tonen lopen gelijk, want welk groepje
    aan de beurt is volgt uit de klok van de server.
+   Het bord toont één ronde tegelijk. De gewone link volgt vanzelf de ronde waarin het laatst
+   is gescoord; met `?r=2` zet je hem vast op een ronde. Vanaf ronde 2 staan er twee kolommen
+   bij: *Vorig* is het totaal uit de eerdere ronden, *Totaal* het aantal slagen over alles
+   samen. De +/- kolom telt vanaf dan alle ronden op, en daarop wordt gerangschikt. Wie
+   vandaag nog moet starten staat er dus al bij, met zijn eerdere resultaat.
 4. Op de beheerpagina staat de spelerslijst: wie is geïmporteerd, in welke flight, met
    welke marker en hoe ver ze zijn. De voortgang per flight volg je op het leaderboard.
 5. Na afloop: *Uitslag CSV* en *Audit log CSV* downloaden. Dat is meteen je back-up.

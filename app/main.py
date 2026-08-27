@@ -17,7 +17,14 @@ from sqlalchemy.orm import Session
 from app.admin import router as admin_router
 from app.auth import AppError, CurrentEntry, DbSession, Unauthorized, hash_token, login_player
 from app.models import DEFAULT_PARS, Competition, Entry, create_all
-from app.scoring import ScoreError, build_card, leaderboard, set_score, sign_card
+from app.scoring import (
+    ScoreError,
+    build_card,
+    huidige_ronde,
+    leaderboard,
+    set_score,
+    sign_card,
+)
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -195,9 +202,12 @@ def _blader(rijen: list, per_scherm: int) -> tuple[list, int, int]:
     return rijen[start : start + per_scherm], start, schermen
 
 
-def _pars(competition: Competition) -> list[int]:
-    """De pars van de baan, voor de parregel boven het leaderboard."""
-    return competition.rounds[0].pars if competition.rounds else DEFAULT_PARS
+def _pars(competition: Competition, ronde: int) -> list[int]:
+    """De pars van de getoonde ronde, voor de parregel boven het leaderboard."""
+    for rnd in competition.rounds:
+        if rnd.no == ronde:
+            return rnd.pars
+    return DEFAULT_PARS
 
 
 def _competition(db: DbSession, slug: str) -> Competition:
@@ -210,20 +220,21 @@ def _competition(db: DbSession, slug: str) -> Competition:
 
 @app.get("/l/{slug}", response_class=HTMLResponse)
 def leaderboard_page(
-    request: Request, slug: str, db: DbSession, n: int = SPELERS_PER_SCHERM
+    request: Request, slug: str, db: DbSession, n: int = SPELERS_PER_SCHERM, r: int | None = None
 ) -> HTMLResponse:
-    """Publieke stand van een competitie. `n` is het aantal spelers per scherm."""
+    """Publieke stand van één ronde. `n` is het aantal spelers per scherm, `r` de ronde."""
     competition = _competition(db, slug)
+    ronde = huidige_ronde(db, competition, r)
     return templates.TemplateResponse(
         request,
         "leaderboard.html",
-        {"competition": competition, "n": n, **_bord(db, competition, n)},
+        {"competition": competition, "n": n, **_bord(db, competition, n, ronde)},
     )
 
 
 @app.get("/l/{slug}/table", response_class=HTMLResponse)
 def leaderboard_table(
-    request: Request, slug: str, db: DbSession, n: int = SPELERS_PER_SCHERM
+    request: Request, slug: str, db: DbSession, n: int = SPELERS_PER_SCHERM, r: int | None = None
 ) -> HTMLResponse:
     """Alleen de tabel, voor de HTMX-polling. Drie seconden gecachet per scherm.
 
@@ -233,13 +244,14 @@ def leaderboard_table(
     drie seconden opgebouwd.
     """
     minuut = int(time.time() // PAGINA_SECONDEN)
-    sleutel = f"{slug}:{n}:{minuut}"
+    sleutel = f"{slug}:{r}:{n}:{minuut}"
     cached = _LB_CACHE.get(sleutel)
     if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
         return HTMLResponse(cached[1])
     competition = _competition(db, slug)
+    ronde = huidige_ronde(db, competition, r)
     html = templates.get_template("_leaderboard_table.html").render(
-        request=request, competition=competition, **_bord(db, competition, n)
+        request=request, competition=competition, **_bord(db, competition, n, ronde)
     )
     if len(_LB_CACHE) > 50:
         _LB_CACHE.clear()  # sleutels bevatten de minuut, dus ruim ze af en toe op
@@ -247,15 +259,16 @@ def leaderboard_table(
     return HTMLResponse(html)
 
 
-def _bord(db: Session, competition: Competition, per_scherm: int) -> dict:
+def _bord(db: Session, competition: Competition, per_scherm: int, ronde: int) -> dict:
     """Alles wat de leaderboardtabel nodig heeft, inclusief het juiste stuk van de stand."""
-    alle = leaderboard(db, competition)
+    alle = leaderboard(db, competition, ronde)
     rijen, start, schermen = _blader(alle, per_scherm)
     return {
         "rows": rijen,
         "offset": start,
         "totaal": len(alle),
         "schermen": schermen,
-        "pars": _pars(competition),
+        "pars": _pars(competition, ronde),
+        "ronde": ronde,
         "bijgewerkt": _klok(),
     }

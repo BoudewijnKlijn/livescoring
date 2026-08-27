@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -265,7 +265,11 @@ def par_klasse(strokes: int | None, par: int) -> str:
 
 @dataclass
 class LeaderboardRow:
-    """Eén speler in één ronde op het leaderboard."""
+    """Eén speler in één ronde op het leaderboard.
+
+    De velden zonder `prev` gaan over de getoonde ronde. `prev_total` en `prev_to_par` zijn
+    het opgetelde resultaat van alle eerdere ronden; in ronde 1 blijven ze leeg.
+    """
 
     name: str
     round_no: int
@@ -276,44 +280,109 @@ class LeaderboardRow:
     out: int | None
     back: int | None
     total: int | None
+    prev_total: int | None = None
+    prev_to_par: int = 0
 
     @property
     def playing(self) -> bool:
         """Telt deze speler mee in de rangschikking?"""
         return self.status == "ok"
 
+    @property
+    def total_to_par(self) -> int:
+        """Stand ten opzichte van par over alle ronden samen. Hierop wordt gerangschikt."""
+        return self.prev_to_par + self.to_par
 
-def leaderboard(db: Session, competition: Competition) -> list[LeaderboardRow]:
-    """Stand van een competitie, per speler per ronde.
+    @property
+    def grand_total(self) -> int | None:
+        """Slagen over alle ronden samen, pas zodra deze ronde helemaal rond is."""
+        if self.total is None:
+            return None
+        return (self.prev_total or 0) + self.total
+
+
+def huidige_ronde(db: Session, competition: Competition, keuze: int | None = None) -> int:
+    """Welke ronde het bord toont.
+
+    Met een expliciete keuze die ronde, zolang die bestaat. Zonder keuze de laatste ronde
+    waarin al iets is ingevuld, zodat de gedeelde link vanzelf meeschuift naar de ronde die
+    nu gespeeld wordt.
+    """
+    nos = [r.no for r in competition.rounds]
+    if not nos:
+        return 1
+    if keuze in nos:
+        return keuze
+    laatste = db.scalar(
+        select(func.max(Round.no))
+        .join(Entry, Entry.round_id == Round.id)
+        .join(HoleScore, HoleScore.entry_id == Entry.id)
+        .where(Round.competition_id == competition.id, HoleScore.strokes.is_not(None))
+    )
+    return laatste or min(nos)
+
+
+def _eerdere_ronden(
+    db: Session, competition: Competition, round_no: int
+) -> dict[int, tuple[int, int]]:
+    """Per speler het totaal en de stand t.o.v. par uit alle ronden vóór `round_no`.
+
+    Ook hier telt alleen wat speler en marker samen hebben goedgekeurd, net als in de
+    ronde die nu loopt. Wie een eerdere ronde niet speelde staat er niet in.
+    """
+    opgeteld: dict[int, tuple[int, int]] = {}
+    eerder = select(Round.id).where(
+        Round.competition_id == competition.id, Round.no < round_no
+    )
+    for entry in db.scalars(select(Entry).where(Entry.round_id.in_(eerder))):
+        card = build_card(entry)
+        if not card.started:
+            continue
+        total, to_par = opgeteld.get(entry.player_id, (0, 0))
+        opgeteld[entry.player_id] = (total + card.agreed_total, to_par + card.agreed_to_par)
+    return opgeteld
+
+
+def leaderboard(
+    db: Session, competition: Competition, round_no: int = 1
+) -> list[LeaderboardRow]:
+    """Stand van één ronde van een competitie.
 
     Een hole telt pas mee als speler en marker dezelfde score invulden. Zolang een ronde
-    loopt staat er geen totaal, alleen de stand ten opzichte van par. Spelers die nog geen
-    enkele score hebben ingevuld staan er niet bij.
+    loopt staat er geen totaal, alleen de stand ten opzichte van par. Vanaf ronde 2 draagt
+    elke speler het resultaat van zijn eerdere ronden mee: daarop wordt gerangschikt, ook
+    als hij vandaag nog moet starten. Wie niets heeft en nergens vandaan komt, staat er niet
+    bij.
     """
+    rnd = db.scalar(
+        select(Round).where(Round.competition_id == competition.id, Round.no == round_no)
+    )
+    if rnd is None:
+        return []
+    eerder = _eerdere_ronden(db, competition, round_no)
     rows: list[LeaderboardRow] = []
-    rounds = db.scalars(
-        select(Round).where(Round.competition_id == competition.id).order_by(Round.no)
-    ).all()
-    for rnd in rounds:
-        for entry in db.scalars(select(Entry).where(Entry.round_id == rnd.id)):
-            card = build_card(entry)
-            if not card.started:
-                continue
-            rows.append(
-                LeaderboardRow(
-                    name=entry.player.name,
-                    round_no=rnd.no,
-                    status=entry.status,
-                    holes=[
-                        (r.agreed_strokes, par_klasse(r.agreed_strokes, r.par))
-                        for r in card.rows
-                    ],
-                    to_par=card.agreed_to_par,
-                    thru=card.agreed_thru,
-                    out=card.nine(1, 9),
-                    back=card.nine(10, HOLES),
-                    total=card.agreed_total if card.agreed_thru == HOLES else None,
-                )
+    for entry in db.scalars(select(Entry).where(Entry.round_id == rnd.id)):
+        card = build_card(entry)
+        vorig = eerder.get(entry.player_id)
+        if not card.started and vorig is None:
+            continue
+        rows.append(
+            LeaderboardRow(
+                name=entry.player.name,
+                round_no=rnd.no,
+                status=entry.status,
+                holes=[
+                    (r.agreed_strokes, par_klasse(r.agreed_strokes, r.par))
+                    for r in card.rows
+                ],
+                to_par=card.agreed_to_par,
+                thru=card.agreed_thru,
+                out=card.nine(1, 9),
+                back=card.nine(10, HOLES),
+                total=card.agreed_total if card.agreed_thru == HOLES else None,
+                prev_total=vorig[0] if vorig else None,
+                prev_to_par=vorig[1] if vorig else 0,
             )
-    rows.sort(key=lambda r: (not r.playing, r.to_par, -r.thru, r.name))
+        )
+    rows.sort(key=lambda r: (not r.playing, r.total_to_par, -r.thru, r.name))
     return rows

@@ -28,6 +28,9 @@
   <p class="klein">Deel deze link met toeschouwers. Hij is openbaar voor wie hem heeft.
     Passen niet alle spelers op het scherm, dan toont het bord er 25 tegelijk en springt
     elke minuut naar de volgende groep. Op een groot scherm kunnen er meer tegelijk.</p>
+  <p class="klein">Het bord toont één ronde tegelijk. Deze link volgt vanzelf de ronde
+    waarin het laatst is gescoord; wil je een vaste ronde tonen, gebruik dan de link bij die
+    ronde hieronder. Vanaf ronde 2 staat het resultaat van de eerdere ronden erbij.</p>
   <label for="perscherm">Spelers per scherm</label>
   <input id="perscherm" type="number" min="3" max="100" value="25" style="max-width:7rem"
          oninput="bouwLink()">
@@ -51,6 +54,11 @@
     <input id="pars{{ r.id }}" type="text" name="pars" value="{{ r.pars|join(',') }}">
     <button class="knop secundair" type="submit">Pars opslaan</button>
   </form>
+  {% if competition.rounds|length > 1 %}
+  <label for="bord{{ r.id }}">Leaderboard van deze ronde</label>
+  <input id="bord{{ r.id }}" type="text" readonly onclick="this.select()"
+         value="{{ base_url }}/l/{{ competition.leaderboard_slug }}?r={{ r.no }}">
+  {% endif %}
 </div>
 {% endfor %}
 

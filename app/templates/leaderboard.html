@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ competition.name }}{% endblock %}
 {% block kop %}Live leaderboard &ndash; {{ competition.name }}{% endblock %}
-{% block subkop %}{% endblock %}
+{% block subkop %}{% if competition.rounds|length > 1 %}Ronde {{ ronde }}{% endif %}{% endblock %}
 {% block inhoud %}
-<div id="stand" hx-get="/l/{{ competition.leaderboard_slug }}/table?n={{ n }}"
+<div id="stand" hx-get="/l/{{ competition.leaderboard_slug }}/table?n={{ n }}&amp;r={{ ronde }}"
      hx-trigger="every 5s" hx-swap="innerHTML">
   {% include "_leaderboard_table.html" %}
 </div>
