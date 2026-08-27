@@ -122,28 +122,49 @@ def _get_competition(db: DbSession, competition_id: int) -> Competition:
     return competition
 
 
-def _beheer(competition: Competition, **extra) -> dict:
+PANELEN = (
+    "spelers", "leaderboard", "score", "status", "ontgrendelen", "link",
+    "importeren", "ronden", "export", "leegmaken", "links", "wissen",
+)
+
+
+def _stand(deelnames: list[dict]) -> dict:
+    """De vier getallen waar de wedstrijdleiding op stuurt, voor de kop en de rail."""
+    return {
+        "deelnames": len(deelnames),
+        "bezig": sum(1 for d in deelnames if 0 < d["thru"] < HOLES),
+        "getekend": sum(1 for d in deelnames if d["entry"].locked),
+        "verschillen": sum(1 for d in deelnames if d["conflicts"]),
+    }
+
+
+def _beheer(competition: Competition, paneel: str = "spelers", **extra) -> dict:
     """De vaste inhoud van het beheerscherm.
 
     Eén plek, zodat een foutmelding nooit een halve pagina kan opleveren: zonder de
     spelerslijst lijkt het alsof iedereen verdwenen is terwijl er niets is gewijzigd.
     """
+    deelnames = _deelnames(competition)
     return {
         "competition": competition,
         "base_url": settings.base_url,
         "code": confirm_code(),
-        "deelnames": _deelnames(competition),
+        "deelnames": deelnames,
+        "stand": _stand(deelnames),
+        "paneel": paneel if paneel in PANELEN else "spelers",
         **extra,
     }
 
 
 @router.get("/c/{competition_id}", response_class=HTMLResponse)
 def competition_page(
-    request: Request, competition_id: int, db: DbSession, _: AdminOnly
+    request: Request, competition_id: int, db: DbSession, _: AdminOnly, p: str = "spelers"
 ) -> HTMLResponse:
-    """Beheerscherm van één competitie."""
+    """Beheerscherm van één competitie. `p` kiest het paneel dat rechts opengaat."""
     competition = _get_competition(db, competition_id)
-    return templates.TemplateResponse(request, "admin_competition.html", _beheer(competition))
+    return templates.TemplateResponse(
+        request, "admin_competition.html", _beheer(competition, p)
+    )
 
 
 @router.post("/c/{competition_id}/import", response_class=HTMLResponse)
@@ -161,7 +182,7 @@ def do_import(
         return templates.TemplateResponse(
             request,
             "admin_competition.html",
-            _beheer(competition, errors=result.errors, csv_tekst=csv_tekst),
+            _beheer(competition, "importeren", errors=result.errors, csv_tekst=csv_tekst),
             status_code=422,
         )
     note = (
@@ -198,9 +219,10 @@ def _deelnames(competition: Competition) -> list[dict]:
                     "entry": entry,
                     "round": rnd,
                     "marker": entry.marker.player.name if entry.marker else None,
-                    "thru": card.thru,
+                    "thru": card.agreed_thru,
                     "total": card.total,
                     "conflicts": card.conflicts,
+                    "holes": [r.agreed for r in card.rows],
                 }
             )
     return regels

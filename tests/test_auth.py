@@ -100,9 +100,9 @@ def test_admin_wist_alle_spelers(db, wedstrijd, client):
     """
     competition, _ = wedstrijd
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
-    pagina = client.get(f"/admin/c/{competition.id}")
-    assert "Jan" in pagina.text
+    assert "Jan" in client.get(f"/admin/c/{competition.id}").text
 
+    pagina = client.get(f"/admin/c/{competition.id}?p=wissen")
     code = re.search(r'name="verwacht" value="([A-Z]{4})"', pagina.text).group(1)
     antwoord = client.post(
         f"/admin/c/{competition.id}/wissen",
@@ -220,7 +220,7 @@ def test_nieuwe_link_voor_een_speler_laat_de_rest_werken(db, wedstrijd, client):
     competition, tokens = wedstrijd
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
     jan = _entry_van(db, "Jan")
-    pagina = client.get(f"/admin/c/{competition.id}").text
+    pagina = client.get(f"/admin/c/{competition.id}?p=link").text
     code = re.search(r'name="verwacht" value="([A-Z]{4})"', pagina).group(1)
 
     antwoord = client.post(
@@ -263,7 +263,7 @@ def test_lege_spelerkeuze_vervangt_niet_stilzwijgend_alle_links(db, wedstrijd, c
     """
     competition, tokens = wedstrijd
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
-    pagina = client.get(f"/admin/c/{competition.id}").text
+    pagina = client.get(f"/admin/c/{competition.id}?p=link").text
     code = re.search(r'name="verwacht" value="([A-Z]{4})"', pagina).group(1)
 
     antwoord = client.post(
@@ -278,37 +278,62 @@ def test_lege_spelerkeuze_vervangt_niet_stilzwijgend_alle_links(db, wedstrijd, c
         client.cookies.clear()
 
 
-def test_beheerpagina_groepeert_alle_functies_in_panelen(db, wedstrijd, client):
-    """Alles dichtgeklapt onder een eigen titel, gegroepeerd naar wanneer je het nodig hebt."""
+def test_beheerpagina_toont_de_rail_met_alle_functies(db, wedstrijd, client):
+    """De rail noemt alles wat je kunt doen, gegroepeerd naar wanneer je het nodig hebt."""
     competition, _ = wedstrijd
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
 
     pagina = client.get(f"/admin/c/{competition.id}").text
 
-    groepen = re.findall(r'<h2 class="groep">(.*?)</h2>', pagina)
-    ruw = re.findall(r"<summary>(.*?)</summary>", pagina, re.S)
-    titels = [re.sub(r"<[^>]+>", "", t).strip() for t in ruw]
+    groepen = re.findall(r'<p class="raillabel">(.*?)</p>', pagina)
+    items = re.findall(r'href="/admin/c/\d+\?p=(\w+)"', pagina)
     assert groepen == ["Tijdens de wedstrijd", "Opzetten en afronden", "Onomkeerbaar"]
-    assert titels[0].startswith("Spelers"), "de spelerslijst staat bovenaan"
-    assert titels[-1] == "Alle spelers en scores verwijderen", "het gevaarlijkste onderaan"
-    assert len(titels) == 12, titels
-    assert 'class="paneel gevaarlijk"' in pagina
-    assert "open>" not in pagina, "niets staat open bij het laden"
+    assert items[:3] == ["spelers", "leaderboard", "score"]
+    assert items[-3:] == ["leegmaken", "links", "wissen"], "het gevaarlijkste onderaan"
+    assert len(set(items)) == 12
 
 
-def test_onomkeerbare_acties_staan_onder_de_dagelijkse(db, wedstrijd, client):
-    """Alles verwijderen mag niet meer verstopt zitten onder de spelerslijst."""
+def test_de_rail_wijst_het_paneel_aan_dat_openstaat(db, wedstrijd, client):
+    """Zonder keuze staat de spelerslijst open; met ?p= dat paneel."""
     competition, _ = wedstrijd
+    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+
+    standaard = client.get(f"/admin/c/{competition.id}").text
+    export = client.get(f"/admin/c/{competition.id}?p=export").text
+    onzin = client.get(f"/admin/c/{competition.id}?p=bestaatniet").text
+
+    assert "?p=spelers" in re.search(r'class="railitem nu"[^>]*href="([^"]+)"', standaard).group(1)
+    assert "<h1>Spelers</h1>" in standaard
+    assert "<h1>Export</h1>" in export
+    assert "Uitslag CSV" in export
+    assert "Uitslag CSV" not in standaard, "één paneel tegelijk in het werkblad"
+    assert "<h1>Spelers</h1>" in onzin, "een onbekend paneel valt terug op de lijst"
+
+
+def test_voortgangsstrip_volgt_de_bevestigde_holes(db, wedstrijd, client, als_speler):
+    """Elke hole een streepje, gevuld zodra speler en marker het eens zijn."""
+    competition, _ = wedstrijd
+    jan = _entry_van(db, "Jan")
+    for hole in (1, 2, 3):
+        als_speler("Jan").post(
+            "/api/score", data={"entry_id": jan.id, "hole": hole, "source": "self", "strokes": 4}
+        )
+        als_speler("Piet").post(
+            "/api/score", data={"entry_id": jan.id, "hole": hole, "source": "marker", "strokes": 4}
+        )
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
 
     pagina = client.get(f"/admin/c/{competition.id}").text
 
-    assert pagina.index("Score corrigeren") < pagina.index('<h2 class="groep">Onomkeerbaar</h2>')
-    assert pagina.index('<h2 class="groep">Onomkeerbaar</h2>') < pagina.index("/wissen")
+    strip = re.search(r'<span class="strip"[^>]*>(.*?)</span>', pagina, re.S).group(1)
+    assert strip.count('class="vol"') == 3
+    assert strip.count('class="leeg"') == 15
+    assert "<b>3</b> onderweg" not in pagina, "alleen Jan is bezig"
+    assert "<b>1</b> onderweg" in pagina
 
 
-def test_importpaneel_gaat_open_als_de_import_faalt(db, wedstrijd, client):
-    """Anders staat de foutmelding in beeld terwijl het geplakte bestand eronder verstopt zit."""
+def test_mislukte_import_opent_het_importpaneel(db, wedstrijd, client):
+    """Anders staat de foutmelding in beeld terwijl het geplakte bestand elders zit."""
     competition, _ = wedstrijd
     client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
 
@@ -318,4 +343,6 @@ def test_importpaneel_gaat_open_als_de_import_faalt(db, wedstrijd, client):
     )
 
     assert antwoord.status_code == 422
-    assert '<details class="paneel" open>' in antwoord.text
+    assert "<h1>Spelers importeren</h1>" in antwoord.text
+    assert "dezelfde flight" in antwoord.text
+    assert 'class="railitem nu"' in antwoord.text

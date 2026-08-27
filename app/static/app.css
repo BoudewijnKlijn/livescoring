@@ -1,21 +1,33 @@
 :root {
-  --accent: #3f3f46;
-  --accent-licht: #e4e4e7;
+  --accent: #005b9a;
+  --accent-donker: #004b80;
+  --accent-licht: #e6eff6;
   --rood: #b91c1c;
   --rood-licht: #fee2e2;
-  --grijs: #64748b;
-  --lijn: #cbd5e1;
-  --tekst: #0f172a;
+  --grijs: #777777;
+  --lijn: #e2e2e2;
+  --lijn-sterk: #cfcfcf;
+  --tekst: #333333;
   --vlak: #ffffff;
-  --achtergrond: #f1f5f9;
+  --achtergrond: #f4f5f7;
+
+  /* Scorekleuren van de kaart. Ze staan alleen op de holes, nergens anders. */
+  --eagle: #ffd84d;
+  --birdie: #ed5b5b;
+  --bogey: #a9d5e9;
+  --dubbel: #3975a5;
+
+  --cel: 30px;
 }
+
+@media (max-width: 700px) { :root { --cel: 27px; } }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
   padding: 0 0 3rem;
-  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 400 16px/1.5 "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--tekst);
   background: var(--achtergrond);
   -webkit-text-size-adjust: 100%;
@@ -54,44 +66,117 @@ a { color: var(--accent); }
 /* Acties die iets onomkeerbaars doen, krijgen een rode rand. */
 .kaart.gevaarlijk { border-left: 3px solid var(--rood); }
 
-/* Beheerpanelen. Per groep één omlijnd blok met haarlijnen ertussen, zodat elf functies
-   samen op één scherm passen. <details> klapt uit zichzelf naar beneden open en er mogen er
-   meerdere tegelijk openstaan; daar is geen javascript voor nodig. */
-h2.groep {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--grijs);
-  margin: 0.8rem 0 0.25rem;
+/* Beheerscherm: links een vaste rail met alles wat je kunt doen, rechts één werkblad.
+   Rustige haarlijnen en veel wit; de enige kleur is het blauw van het actieve item. */
+.beheer {
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+  max-width: 1180px;
+  margin: 0 auto;
 }
-h2.groep:first-of-type { margin-top: 0.2rem; }
-.panelen {
+.rail { position: sticky; top: 0.75rem; padding: 0.25rem 0; }
+.raillabel {
+  margin: 1.1rem 0 0.3rem 0.7rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9a9a9a;
+}
+.raillabel:first-child { margin-top: 0; }
+.railitem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.42rem 0.7rem;
+  border-radius: 7px;
+  font-size: 0.88rem;
+  color: #4a4a4a;
+  text-decoration: none;
+  border-left: 2px solid transparent;
+}
+.railitem:hover { background: #ededf0; color: var(--tekst); }
+.railitem b { font-weight: 500; font-size: 0.78rem; color: #9a9a9a; }
+.railitem.nu {
+  background: var(--vlak);
+  border-left-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.railitem.nu b { color: var(--accent); }
+
+.werkblad {
   background: var(--vlak);
   border: 1px solid var(--lijn);
-  border-radius: 10px;
-  overflow: hidden;
+  border-radius: 12px;
+  padding: 1.5rem 1.6rem 1.75rem;
 }
-.panelen > .paneel + .paneel { border-top: 1px solid var(--lijn); }
-.paneel > summary {
-  cursor: pointer;
-  padding: 0.4rem 0.6rem;
-  font-weight: 600;
-  font-size: 0.9rem;
-  list-style-position: inside;
+.werkblad h1 { font-size: 1.4rem; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.werkblad h1.gevaar { color: var(--rood); }
+.werkblad .onder {
+  margin: 0.3rem 0 1.1rem;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid var(--lijn);
+  color: var(--grijs);
+  font-size: 0.92rem;
 }
-.paneel > summary:hover { color: var(--accent); }
-.paneel > summary .klein { font-weight: 400; }
-.paneel[open] > summary { border-bottom: 1px solid var(--lijn); }
-/* Alleen de inhoud krijgt marges; dichtgeklapt is een paneel dus niet meer dan zijn regel. */
-.paneel > :not(summary) { margin-left: 0.6rem; margin-right: 0.6rem; }
-.paneel > :last-child { margin-bottom: 0.6rem; }
-.paneel[open] > summary + * { margin-top: 0.5rem; }
-/* Acties die iets onomkeerbaars doen, krijgen een rode rand. */
-.paneel.gevaarlijk { border-left: 3px solid var(--rood); }
-/* De ronden staan samen in één paneel, met een streep tussen de ronden. */
-.blok + .blok { border-top: 1px solid var(--lijn); margin-top: 0.5rem; padding-top: 0.5rem; }
-.blok h3 { font-size: 0.9rem; margin: 0 0 0.3rem; }
-.blok h3 .klein { font-weight: 400; }
+.werkblad h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem; }
+.werkblad h2 .klein { font-weight: 400; }
+.werkblad > form { max-width: 30rem; }
+.werkblad label { margin-top: 0.9rem; }
+.werkblad > form > button { margin-top: 1.1rem; }
+.leegstaat { color: var(--grijs); font-size: 0.92rem; }
+.kortveld { max-width: 7rem; }
+.codeveld { max-width: 8rem; text-transform: uppercase; letter-spacing: 0.14em; }
+
+/* De stand van zaken: de getallen waar de wedstrijdleiding de hele dag op stuurt. */
+.stand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.6rem;
+  margin: -0.4rem 0 1rem;
+  font-size: 0.85rem;
+  color: var(--grijs);
+}
+.stand b { font-size: 1.15rem; font-weight: 600; color: var(--tekst); margin-right: 0.25rem; }
+.stand .alarm, .stand .alarm b { color: var(--rood); }
+
+/* Voortgang per kaart: achttien streepjes, gevuld zodra speler en marker het eens zijn. */
+.strip { display: inline-flex; gap: 1px; }
+.strip i { width: 4px; height: 13px; border-radius: 1px; background: #e8e8e8; }
+.strip i.vol { background: var(--accent); }
+
+.uitleg { margin-top: 1.75rem; padding-top: 1.1rem; border-top: 1px solid var(--lijn); }
+.uitleg ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+.uitleg li { margin-bottom: 0.3rem; }
+.blok + .blok { border-top: 1px solid var(--lijn); margin-top: 1.4rem; padding-top: 1.2rem; }
+
+/* Smal scherm: de rail wordt een rij chips boven het werkblad. */
+@media (max-width: 800px) {
+  .beheer { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+  .rail {
+    position: static;
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  .raillabel { display: none; }
+  .railitem {
+    flex: 0 0 auto;
+    border: 1px solid var(--lijn);
+    border-left-width: 1px;
+    background: var(--vlak);
+    white-space: nowrap;
+  }
+  .railitem.nu { border-color: var(--accent); }
+  .werkblad { padding: 1.1rem 1rem 1.3rem; }
+}
 
 .knop, button, input[type="submit"] {
   display: inline-flex;
@@ -196,8 +281,8 @@ table.lijst tr.klaar td:first-child::after { content: " ✓"; color: var(--accen
   font-size: 0.95rem;
 }
 
-/* Leaderboard: elke hole een vakje, gekleurd naar par. */
-/* Leaderboard: papieren scorekaart. Rustig raster, de scores dragen de kleur. */
+/* Leaderboard als scorekaart. Kleuren en tinten volgen de kaart van de club: de scores
+   dragen de kleur, het raster blijft stil. Geen gaten tussen holes, dus zo smal mogelijk. */
 .bord-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -206,52 +291,118 @@ table.lijst tr.klaar td:first-child::after { content: " ✓"; color: var(--accen
   border-radius: 10px;
 }
 table.bord {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
   width: max-content;
+  min-width: 100%;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 table.bord th, table.bord td {
-  width: 30px;
-  height: 27px;
+  width: var(--cel);
+  height: 36px;
   padding: 0;
   text-align: center;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 400;
+  border-bottom: 1px solid var(--lijn);
 }
-table.bord thead th { color: var(--grijs); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; }
-table.bord tr.pars td, table.bord tr.pars th { color: var(--grijs); font-size: 0.72rem; height: 19px; }
-table.bord thead tr.pars td, table.bord thead tr.pars th { border-bottom: 1px solid var(--lijn); }
-table.bord tbody tr + tr th, table.bord tbody tr + tr td { border-top: 1px solid var(--lijn); }
-/* Elke drie spelers een zwaardere lijn: houvast voor wie van een afstand meekijkt. */
-table.bord tbody tr:nth-child(3n) th, table.bord tbody tr:nth-child(3n) td {
-  border-bottom: 2px solid var(--accent);
+table.bord tbody tr:last-child th, table.bord tbody tr:last-child td { border-bottom: 0; }
+
+/* Kop: holenummers op een grijze band, daaronder de pars in lichter grijs. */
+table.bord tr.holerij th {
+  height: 30px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--grijs);
+  background: #f7f7f7;
+  letter-spacing: 0.02em;
 }
-table.bord tbody tr:nth-child(3n) + tr th, table.bord tbody tr:nth-child(3n) + tr td {
-  border-top: 0;
+table.bord tr.pars th, table.bord tr.pars td {
+  height: 26px;
+  font-size: 0.7rem;
+  color: #999;
+  background: #fcfcfc;
 }
+table.bord tr.pars { border-bottom: 1px solid var(--lijn); }
 
-/* Vastgezette kolommen: positie, naam en de stand tegen par blijven altijd zichtbaar. */
-table.bord .pos    { position: sticky; left: 0;      width: 26px;  background: var(--vlak); z-index: 2; color: var(--grijs); font-size: 0.75rem; }
-table.bord .speler { position: sticky; left: 26px;   width: 116px; background: var(--vlak); z-index: 2;
-                     text-align: left; padding: 0 0.4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-table.bord .topar  { position: sticky; left: 142px;  width: 44px;  background: var(--vlak); z-index: 2;
-                     font-weight: 700; box-shadow: 1px 0 0 var(--lijn); }
-table.bord .topar.onder { color: #dc2626; }
+/* Vastgezette kolommen: plaats, naam en de stand tegen par blijven altijd in beeld. */
+table.bord .pos {
+  position: sticky; left: 0; z-index: 2;
+  width: 26px; background: var(--vlak); color: #999; font-size: 0.72rem;
+}
+table.bord .speler {
+  position: sticky; left: 26px; z-index: 2;
+  width: 132px; background: var(--vlak);
+  text-align: left; padding: 0 0.5rem; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+table.bord .topar {
+  position: sticky; left: 158px; z-index: 2;
+  width: 42px; background: var(--vlak); font-weight: 600;
+  box-shadow: 1px 0 0 var(--lijn);
+}
+table.bord .topar.onder { color: var(--birdie); }
+table.bord tr.holerij .pos, table.bord tr.holerij .speler { background: #f7f7f7; }
+table.bord tr.holerij .topar { background: #f7f7f7; }
+table.bord tr.pars .pos, table.bord tr.pars .speler, table.bord tr.pars .topar { background: #fcfcfc; }
 
-table.bord .gat { width: 12px; background: var(--achtergrond); }
-table.bord .som { width: 38px; font-weight: 700; background: #fafafa; }
-table.bord thead .som { color: var(--tekst); }
+/* Uit, In en de rondetotalen: rustig grijs, met een lijn die ze van de holes losmaakt. */
+table.bord .som {
+  width: 44px;
+  font-weight: 500;
+  color: #555;
+  background: #f3f3f3;
+  border-left: 1px solid #cfcfcf;
+}
+table.bord .som.totaal { width: 50px; font-weight: 600; color: var(--tekst); }
+table.bord tr.pars .som { background: #f3f3f3; }
 
-table.bord td.vak { font-weight: 700; }
-td.vak.eagle  { background: #facc15; color: #000; }
-td.vak.birdie { background: #dc2626; color: #fff; }
-td.vak.par    { background: var(--vlak); color: var(--tekst); }
-td.vak.bogey  { background: #2563eb; color: #fff; }
-td.vak.dubbel { background: #000000; color: #fff; }
+/* De score zelf: een blokje van 26px, gekleurd naar het resultaat op die hole. */
+table.bord td.vak { background: var(--vlak); }
+.score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: #222;
+}
+.score.eagle  { background: var(--eagle); }
+.score.birdie { background: var(--birdie); color: #fff; }
+.score.par    { background: transparent; }
+.score.bogey  { background: var(--bogey); }
+.score.dubbel { background: var(--dubbel); color: #fff; }
 
-table.bord tr.uitgevallen .speler { color: var(--grijs); text-decoration: line-through; }
+table.bord tr.uitgevallen .speler { color: var(--grijs); }
+table.bord tr.uitgevallen .speler { text-decoration: none; }
+table.bord td.leeg { color: var(--grijs); font-weight: 400; }
+
+/* Onder de kaart: de kleursleutel links, de tijd rechts. */
+.onderrand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.2rem;
+  margin-top: 0.5rem;
+}
+.legenda { display: flex; flex-wrap: wrap; gap: 0.9rem; }
+.sleutel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: #666;
+  white-space: nowrap;
+}
+.sleutel i.score { width: 15px; height: 15px; border: 1px solid rgba(0, 0, 0, 0.08); }
+.sleutel i.score.par { background: #fff; border-color: #ccc; }
+.onderrand .klein { margin: 0; }
 
 /* Wedstrijdenlijst: één regel per wedstrijd, hairlines in plaats van kaders. */
 .nieuw {

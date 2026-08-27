@@ -1,257 +1,307 @@
 {% extends "base.html" %}
 {% block title %}{{ competition.name }}{% endblock %}
 {% block kop %}{{ competition.name }}{% endblock %}
-{% block subkop %}Beheer{% endblock %}
+{% block subkop %}Wedstrijdleiding{% endblock %}
 {% block headeractie %}<a class="knop secundair" href="/admin">Alle wedstrijden</a>{% endblock %}
 {% block inhoud %}
-{#- Alles staat dichtgeklapt onder zijn eigen titel, gegroepeerd naar wanneer je het nodig
-    hebt: bovenaan waar je tijdens de wedstrijd steeds naar kijkt, onderaan wat onomkeerbaar
-    is en wat je hooguit één keer doet. Meerdere panelen mogen tegelijk openstaan. -#}
+{#- Links de rail met alles wat je kunt doen, rechts het werkblad met één ding tegelijk.
+    Elk railitem is een gewone link, dus de terugknop werkt en je kunt een paneel bookmarken.
+    De getallen in de rail zijn de stand van zaken: navigatie en dashboard in één. -#}
 
-{% if errors %}
-<div class="kaart">
-  <p class="melding fout">De import is niet uitgevoerd. Er is niets gewijzigd.</p>
-  <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
-</div>
-{% endif %}
-
-{% macro spelerkeuze(naam) %}
+{%- macro spelerkeuze(naam) -%}
 <select name="{{ naam }}" required>
   <option value="">Kies speler…</option>
   {% for d in deelnames %}
     <option value="{{ d.entry.id }}">R{{ d.round.no }} · {{ d.entry.flight.name }} · {{ d.entry.player.name }}</option>
   {% endfor %}
 </select>
-{% endmacro %}
+{%- endmacro -%}
 
-<h2 class="groep">Tijdens de wedstrijd</h2>
-<div class="panelen">
+{%- macro item(id, tekst, aantal=None) -%}
+<a class="railitem{% if paneel == id %} nu{% endif %}"
+   href="/admin/c/{{ competition.id }}?p={{ id }}">
+  <span>{{ tekst }}</span>{% if aantal is not none %}<b>{{ aantal }}</b>{% endif %}
+</a>
+{%- endmacro -%}
 
-  <details class="paneel">
-    <summary>Spelers <span class="klein">{{ deelnames|length }} deelname(s)</span></summary>
-    {% if deelnames %}
-    <div class="scroller">
-      <table class="lijst">
-        <tr>
-          <th>Naam</th><th>E-mail</th><th>Ronde</th><th>Flight</th><th>Start</th>
-          <th>Marker</th><th class="getal">Holes</th><th class="getal">Totaal</th><th>Status</th>
-        </tr>
-        {% for d in deelnames %}
-        <tr>
-          <td>{{ d.entry.player.name }}</td>
-          <td class="klein">{{ d.entry.player.email or '—' }}</td>
-          <td>{{ d.round.no }}</td>
-          <td>{{ d.entry.flight.name }}</td>
-          <td>{{ d.entry.flight.start_hole }}</td>
-          <td class="klein">{{ d.marker or '— geen —' }}</td>
-          <td class="getal">{{ d.thru }}/18</td>
-          <td class="getal">{{ d.total }}</td>
-          <td>
-            {% if d.entry.status != 'ok' %}<span class="pil rood">{{ d.entry.status|upper }}</span>{% endif %}
-            {% if d.conflicts %}<span class="pil rood">verschil {{ d.conflicts|join(', ') }}</span>{% endif %}
-            {% if d.entry.locked %}<span class="pil ok">getekend</span>{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </table>
-    </div>
-    <p class="klein">Eén speler die niet meespeelt zet je op WD, NR of DQ; dan blijft zijn
-      kaart bewaard. Klopt de hele lijst niet, importeer dan een verbeterd bestand.</p>
-    {% else %}
-    <p class="klein">Nog geen spelers. Importeer ze onder <em>Opzetten en afronden</em>.</p>
-    {% endif %}
-  </details>
+{%- macro bevestig(veld) -%}
+<label for="{{ veld }}">Typ ter bevestiging: <strong>{{ code }}</strong></label>
+<input id="{{ veld }}" type="text" name="code" autocapitalize="characters" class="codeveld">
+<input type="hidden" name="verwacht" value="{{ code }}">
+{%- endmacro -%}
 
-  <details class="paneel">
-    <summary>Leaderboard voor toeschouwers</summary>
-    <p class="klein">Deel deze link met toeschouwers. Hij is openbaar voor wie hem heeft.
-      Passen niet alle spelers op het scherm, dan toont het bord er 25 tegelijk en springt
-      elke minuut naar de volgende groep. Op een groot scherm kunnen er meer tegelijk.</p>
-    <p class="klein">Het bord toont één ronde tegelijk. Deze link volgt vanzelf de ronde
-      waarin het laatst is gescoord; wil je een vaste ronde tonen, gebruik dan de link bij
-      die ronde onder <em>Opzetten en afronden</em>. Vanaf ronde 2 staat het resultaat van de
-      eerdere ronden erbij.</p>
-    <label for="perscherm">Spelers per scherm</label>
-    <input id="perscherm" type="number" min="3" max="100" value="25" style="max-width:7rem"
-           oninput="bouwLink()">
-    <input id="bordlink" type="text" readonly onclick="this.select()"
-           value="{{ base_url }}/l/{{ competition.leaderboard_slug }}">
-    <script>
-      function bouwLink() {
-        var n = parseInt(document.getElementById('perscherm').value, 10);
-        var basis = "{{ base_url }}/l/{{ competition.leaderboard_slug }}";
-        document.getElementById('bordlink').value = (n && n !== 25) ? basis + '?n=' + n : basis;
-      }
-    </script>
-  </details>
+<div class="beheer">
 
+<nav class="rail" aria-label="Beheer">
+  <p class="raillabel">Tijdens de wedstrijd</p>
+  {{ item('spelers', 'Spelers', stand.deelnames) }}
+  {{ item('leaderboard', 'Leaderboard') }}
+  {{ item('score', 'Score corrigeren') }}
+  {{ item('status', 'Status wijzigen') }}
+  {{ item('ontgrendelen', 'Kaart ontgrendelen') }}
+  {{ item('link', 'Nieuwe link') }}
+
+  <p class="raillabel">Opzetten en afronden</p>
+  {{ item('importeren', 'Spelers importeren') }}
+  {{ item('ronden', 'Ronden', competition.rounds|length) }}
+  {{ item('export', 'Export') }}
+
+  <p class="raillabel">Onomkeerbaar</p>
+  {{ item('leegmaken', 'Kaart leegmaken') }}
+  {{ item('links', 'Alle links vervangen') }}
+  {{ item('wissen', 'Alles verwijderen') }}
+</nav>
+
+<section class="werkblad">
+
+{% if errors %}
+<div class="melding fout">
+  <strong>De import is niet uitgevoerd. Er is niets gewijzigd.</strong>
+  <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if paneel == 'spelers' %}
+  <h1>Spelers</h1>
+  <p class="onder">Wie meespeelt, met wie hij loopt en hoe ver hij is.</p>
+  <div class="stand">
+    <span><b>{{ stand.deelnames }}</b> deelnames</span>
+    <span><b>{{ stand.bezig }}</b> onderweg</span>
+    <span><b>{{ stand.getekend }}</b> getekend</span>
+    <span class="{% if stand.verschillen %}alarm{% endif %}">
+      <b>{{ stand.verschillen }}</b> met verschil</span>
+  </div>
   {% if deelnames %}
-  <details class="paneel">
-    <summary>Score corrigeren</summary>
-    <p class="klein">Overschrijft beide invoeren van die hole, ook op een getekende kaart.
-      De reden komt in de audit log.</p>
-    <form method="post" action="/admin/entry/0/score"
-          onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/score'">
-      {{ spelerkeuze('entry_kiezer') }}
-      <div class="rij">
-        <span><label for="hole">Hole</label>
-          <input id="hole" type="number" name="hole" min="1" max="18" required style="width:6rem"></span>
-        <span><label for="strokes">Slagen</label>
-          <input id="strokes" type="number" name="strokes" min="1" max="20" style="width:6rem"></span>
-      </div>
-      <label for="reden">Reden (verplicht)</label>
-      <input id="reden" type="text" name="reden" required>
-      <button class="knop" type="submit">Corrigeren</button>
-    </form>
-  </details>
-
-  <details class="paneel">
-    <summary>Status wijzigen (DQ, NR, WD)</summary>
-    <p class="klein">DQ, NR of WD halen een speler uit de rangschikking.</p>
-    <form method="post" action="/admin/entry/0/status"
-          onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/status'">
-      {{ spelerkeuze('entry_kiezer') }}
-      <label for="status">Status</label>
-      <select id="status" name="status">
-        <option value="ok">ok — speelt</option>
-        <option value="dq">dq — gediskwalificeerd</option>
-        <option value="nr">nr — no return</option>
-        <option value="wd">wd — teruggetrokken</option>
-      </select>
-      <label for="reden2">Reden</label>
-      <input id="reden2" type="text" name="reden">
-      <button class="knop" type="submit">Status opslaan</button>
-    </form>
-  </details>
-
-  <details class="paneel">
-    <summary>Kaart ontgrendelen</summary>
-    <p class="klein">Maakt een getekende kaart weer bewerkbaar voor de speler.</p>
-    <form method="post" action="/admin/entry/0/unlock"
-          onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/unlock'">
-      {{ spelerkeuze('entry_kiezer') }}
-      <label for="reden3">Reden</label>
-      <input id="reden3" type="text" name="reden">
-      <button class="knop secundair" type="submit">Ontgrendelen</button>
-    </form>
-  </details>
-
-  <details class="paneel">
-    <summary>Nieuwe link voor één speler</summary>
-    <p class="klein">Voor wie zijn link kwijt is. Alleen die ene link wordt vervangen, de rest
-      blijft werken en zijn scores blijven staan. Je krijgt de nieuwe link meteen te zien.</p>
-    <form method="post" action="/admin/c/{{ competition.id }}/rotate">
-      <input type="hidden" name="scope" value="entry">
-      <input type="hidden" name="verwacht" value="{{ code }}">
-      {{ spelerkeuze('entry_id') }}
-      <label>Typ ter bevestiging: <strong>{{ code }}</strong></label>
-      <input type="text" name="code" autocapitalize="characters" style="max-width:8rem">
-      <button class="knop" type="submit">Nieuwe link maken</button>
-    </form>
-  </details>
+  <div class="scroller">
+    <table class="lijst">
+      <tr>
+        <th>Naam</th><th>R</th><th>Flight</th><th>Start</th><th>Marker</th>
+        <th>Voortgang</th><th class="getal">Totaal</th><th>Status</th>
+      </tr>
+      {% for d in deelnames %}
+      <tr>
+        <td class="naam">{{ d.entry.player.name }}</td>
+        <td>{{ d.round.no }}</td>
+        <td>{{ d.entry.flight.name }}</td>
+        <td>{{ d.entry.flight.start_hole }}</td>
+        <td class="klein">{{ d.marker or '— geen —' }}</td>
+        <td>
+          <span class="strip" title="{{ d.thru }} van 18 holes">
+            {%- for gedaan in d.holes -%}
+            <i class="{{ 'vol' if gedaan else 'leeg' }}"></i>
+            {%- endfor -%}
+          </span>
+        </td>
+        <td class="getal">{{ d.total or '' }}</td>
+        <td>
+          {% if d.entry.status != 'ok' %}<span class="pil rood">{{ d.entry.status|upper }}</span>{% endif %}
+          {% if d.conflicts %}<span class="pil rood">verschil {{ d.conflicts|join(', ') }}</span>{% endif %}
+          {% if d.entry.locked %}<span class="pil ok">getekend</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <p class="klein">Speelt iemand niet mee, zet hem dan op WD, NR of DQ. Zijn kaart blijft
+    dan bewaard. Klopt de hele lijst niet, importeer dan een verbeterd bestand.</p>
+  {% else %}
+  <p class="leegstaat">Nog geen spelers.
+    <a href="/admin/c/{{ competition.id }}?p=importeren">Importeer de indeling</a> om te beginnen.</p>
   {% endif %}
 
-</div>
+{% elif paneel == 'leaderboard' %}
+  <h1>Leaderboard</h1>
+  <p class="onder">De link voor toeschouwers. Openbaar voor wie hem heeft.</p>
+  <label for="perscherm">Spelers per scherm</label>
+  <input id="perscherm" type="number" min="3" max="100" value="25" class="kortveld"
+         oninput="bouwLink()">
+  <label for="bordlink">Link</label>
+  <input id="bordlink" type="text" readonly onclick="this.select()"
+         value="{{ base_url }}/l/{{ competition.leaderboard_slug }}">
+  <p class="klein">Passen niet alle spelers op het scherm, dan toont het bord er 25 tegelijk
+    en springt het elke minuut naar de volgende groep. Op een groot scherm kunnen er meer
+    tegelijk.</p>
+  <p class="klein">Het bord toont één ronde tegelijk. Deze link volgt vanzelf de ronde waarin
+    het laatst is gescoord. Wil je een vaste ronde tonen, pak dan de link bij die ronde onder
+    <a href="/admin/c/{{ competition.id }}?p=ronden">Ronden</a>. Vanaf ronde 2 staat het
+    resultaat van de eerdere ronden erbij.</p>
+  <script>
+    function bouwLink() {
+      var n = parseInt(document.getElementById('perscherm').value, 10);
+      var basis = "{{ base_url }}/l/{{ competition.leaderboard_slug }}";
+      document.getElementById('bordlink').value = (n && n !== 25) ? basis + '?n=' + n : basis;
+    }
+  </script>
 
-<h2 class="groep">Opzetten en afronden</h2>
-<div class="panelen">
-
-  <details class="paneel"{% if errors %} open{% endif %}>
-    <summary>Spelers importeren</summary>
-    <p class="klein">Eén regel per speler per ronde. Kolommen:
-      <code>naam,email,ronde,flight,starthole,marker</code>. Starthole is 1 of 10.</p>
-    <p class="klein">Opnieuw importeren mag. Het bestand wint voor flight, starthole, marker
-      en e-mail; wat er niet in staat blijft zoals het was. Scores en links blijven altijd
-      staan, ook op een getekende kaart. Na afloop moet elke speler precies één marker
-      hebben, uit dezelfde flight, en mag niemand de marker van twee spelers zijn. Klopt dat
-      niet, dan gaat de hele import niet door en zegt de melding wat eraan te doen is.</p>
-    <form method="post" action="/admin/c/{{ competition.id }}/import">
-      <textarea name="csv_tekst" placeholder="naam,email,ronde,flight,starthole,marker&#10;Jan de Vries,jan@x.nl,1,A,1,Piet Bakker&#10;Piet Bakker,piet@x.nl,1,A,1,Jan de Vries">{{ csv_tekst or '' }}</textarea>
-      <button class="knop groot" type="submit">Importeren</button>
-    </form>
-  </details>
-
-  <details class="paneel">
-    <summary>Ronden <span class="klein">{{ competition.rounds|length }}</span></summary>
-    {% for r in competition.rounds %}
-    <div class="blok">
-      <h3>Ronde {{ r.no }} <span class="klein">{{ r.flights|length }} flights ·
-        {{ r.entries|length }} deelnames</span></h3>
-      <form method="post" action="/admin/round/{{ r.id }}/pars">
-        <label for="pars{{ r.id }}">Pars van hole 1 t/m 18</label>
-        <input id="pars{{ r.id }}" type="text" name="pars" value="{{ r.pars|join(',') }}">
-        <button class="knop secundair" type="submit">Pars opslaan</button>
-      </form>
-      {% if competition.rounds|length > 1 %}
-      <label for="bord{{ r.id }}">Leaderboard van deze ronde</label>
-      <input id="bord{{ r.id }}" type="text" readonly onclick="this.select()"
-             value="{{ base_url }}/l/{{ competition.leaderboard_slug }}?r={{ r.no }}">
-      {% endif %}
-    </div>
-    {% else %}
-    <p class="klein">Nog geen ronden. Die ontstaan bij de import.</p>
-    {% endfor %}
-  </details>
-
-  <details class="paneel">
-    <summary>Export</summary>
-    <p class="klein">Download dit na afloop. Dat is meteen je back-up.</p>
+{% elif paneel == 'score' %}
+  <h1>Score corrigeren</h1>
+  <p class="onder">Overschrijft beide invoeren van één hole, ook op een getekende kaart.</p>
+  {% if deelnames %}
+  <form method="post" action="/admin/entry/0/score"
+        onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/score'">
+    <label for="speler">Speler</label>
+    {{ spelerkeuze('entry_kiezer') }}
     <div class="rij">
-      <a class="knop secundair" href="/admin/c/{{ competition.id }}/export.csv">Uitslag CSV</a>
-      <a class="knop secundair" href="/admin/c/{{ competition.id }}/audit.csv">Audit log CSV</a>
+      <span><label for="hole">Hole</label>
+        <input id="hole" type="number" name="hole" min="1" max="18" required class="kortveld"></span>
+      <span><label for="strokes">Slagen</label>
+        <input id="strokes" type="number" name="strokes" min="1" max="20" class="kortveld"></span>
     </div>
-  </details>
+    <label for="reden">Reden</label>
+    <input id="reden" type="text" name="reden" required
+           placeholder="Waarom wijk je af van wat er is ingevuld?">
+    <p class="klein">De reden komt in de audit log. Laat je slagen leeg, dan wordt de hole
+      weer leeggemaakt.</p>
+    <button class="knop" type="submit">Corrigeren</button>
+  </form>
+  {% else %}<p class="leegstaat">Nog geen spelers om te corrigeren.</p>{% endif %}
 
-</div>
-
-<h2 class="groep">Onomkeerbaar</h2>
-<div class="panelen">
-
+{% elif paneel == 'status' %}
+  <h1>Status wijzigen</h1>
+  <p class="onder">DQ, NR en WD halen een speler uit de rangschikking. Zijn kaart blijft staan.</p>
   {% if deelnames %}
-  <details class="paneel gevaarlijk">
-    <summary>Kaart leegmaken</summary>
-    <p class="melding fout">Wist alle scores van die speler in die ronde. Niet terug te draaien.</p>
-    <form method="post" action="/admin/entry/0/reset"
-          onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/reset'">
-      {{ spelerkeuze('entry_kiezer') }}
-      <input type="hidden" name="verwacht" value="{{ code }}">
-      <label>Typ ter bevestiging: <strong>{{ code }}</strong></label>
-      <input type="text" name="code" autocapitalize="characters" style="max-width:8rem">
-      <label for="reden4">Reden</label>
-      <input id="reden4" type="text" name="reden">
-      <button class="knop gevaar" type="submit">Kaart leegmaken</button>
-    </form>
-  </details>
-  {% endif %}
+  <form method="post" action="/admin/entry/0/status"
+        onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/status'">
+    <label>Speler</label>
+    {{ spelerkeuze('entry_kiezer') }}
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      <option value="ok">ok — speelt</option>
+      <option value="dq">dq — gediskwalificeerd</option>
+      <option value="nr">nr — no return</option>
+      <option value="wd">wd — teruggetrokken</option>
+    </select>
+    <label for="reden2">Reden</label>
+    <input id="reden2" type="text" name="reden">
+    <button class="knop" type="submit">Status opslaan</button>
+  </form>
+  {% else %}<p class="leegstaat">Nog geen spelers.</p>{% endif %}
 
-  <details class="paneel gevaarlijk">
-    <summary>Nieuwe links voor iedereen</summary>
-    <p class="klein">Vervangt de links van alle spelers in deze wedstrijd. Oude links werken
-      daarna niet meer. <strong>Scores blijven staan.</strong> Gebruik dit ook als je de
-      linkenlijst kwijt bent.</p>
-    <form method="post" action="/admin/c/{{ competition.id }}/rotate">
-      <input type="hidden" name="scope" value="competition">
-      <input type="hidden" name="verwacht" value="{{ code }}">
-      <label>Typ ter bevestiging: <strong>{{ code }}</strong></label>
-      <input type="text" name="code" autocapitalize="characters" style="max-width:8rem">
-      <button class="knop gevaar" type="submit">Alle links vervangen</button>
-    </form>
-  </details>
-
+{% elif paneel == 'ontgrendelen' %}
+  <h1>Kaart ontgrendelen</h1>
+  <p class="onder">Maakt een getekende kaart weer bewerkbaar voor de speler.</p>
   {% if deelnames %}
-  <details class="paneel gevaarlijk">
-    <summary>Alle spelers en scores verwijderen</summary>
-    <p class="melding fout">Wist alle spelers, flights, ronden en scores van deze wedstrijd.
-      Bedoeld om opnieuw te beginnen met een verbeterd bestand. De wedstrijd zelf en de
-      leaderboardlink blijven bestaan.</p>
-    <form method="post" action="/admin/c/{{ competition.id }}/wissen">
-      <input type="hidden" name="verwacht" value="{{ code }}">
-      <label>Typ ter bevestiging: <strong>{{ code }}</strong></label>
-      <input type="text" name="code" autocapitalize="characters" style="max-width:8rem">
-      <button class="knop gevaar" type="submit">Alle spelers en scores verwijderen</button>
-    </form>
-  </details>
-  {% endif %}
+  <form method="post" action="/admin/entry/0/unlock"
+        onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/unlock'">
+    <label>Speler</label>
+    {{ spelerkeuze('entry_kiezer') }}
+    <label for="reden3">Reden</label>
+    <input id="reden3" type="text" name="reden">
+    <button class="knop" type="submit">Ontgrendelen</button>
+  </form>
+  {% else %}<p class="leegstaat">Nog geen spelers.</p>{% endif %}
 
+{% elif paneel == 'link' %}
+  <h1>Nieuwe link voor één speler</h1>
+  <p class="onder">Voor wie zijn link kwijt is. Alleen die ene link wordt vervangen.</p>
+  {% if deelnames %}
+  <form method="post" action="/admin/c/{{ competition.id }}/rotate">
+    <input type="hidden" name="scope" value="entry">
+    <label>Speler</label>
+    {{ spelerkeuze('entry_id') }}
+    {{ bevestig('code1') }}
+    <p class="klein">De rest van het veld houdt zijn link, en zijn scores blijven staan. Je
+      krijgt de nieuwe link meteen te zien; daarna is hij niet meer op te vragen.</p>
+    <button class="knop" type="submit">Nieuwe link maken</button>
+  </form>
+  {% else %}<p class="leegstaat">Nog geen spelers.</p>{% endif %}
+
+{% elif paneel == 'importeren' %}
+  <h1>Spelers importeren</h1>
+  <p class="onder">Eén regel per speler per ronde. Speelt iemand twee ronden, dan staat hij
+    er twee keer in.</p>
+  <form method="post" action="/admin/c/{{ competition.id }}/import">
+    <label for="csv_tekst">Plak de regels uit je bestand</label>
+    <textarea id="csv_tekst" name="csv_tekst" placeholder="naam,email,ronde,flight,starthole,marker&#10;Jan de Vries,jan@x.nl,1,A,1,Piet Bakker&#10;Piet Bakker,piet@x.nl,1,A,1,Jan de Vries">{{ csv_tekst or '' }}</textarea>
+    <button class="knop groot" type="submit">Importeren</button>
+  </form>
+  <div class="uitleg">
+    <h2>Wat de import doet</h2>
+    <p class="klein">Kolommen: <code>naam,email,ronde,flight,starthole,marker</code>.
+      Starthole is 1 of 10 en geldt voor de hele flight. Marker is verplicht.</p>
+    <ul class="klein">
+      <li>Het bestand wint voor flight, starthole, marker en e-mail. Wat er niet in staat
+        blijft zoals het was, tot en met spelers die er niet in staan.</li>
+      <li>Scores en persoonlijke links blijven altijd staan, ook op een getekende kaart.</li>
+      <li>Na afloop heeft elke speler precies één marker uit zijn eigen flight, en is niemand
+        de marker van twee spelers. Klopt dat niet, dan gaat de hele import niet door.</li>
+      <li>Een naam die anders geschreven is, is een andere speler.</li>
+    </ul>
+  </div>
+
+{% elif paneel == 'ronden' %}
+  <h1>Ronden</h1>
+  <p class="onder">De pars van de baan en, bij meer ronden, de link per ronde.</p>
+  {% for r in competition.rounds %}
+  <div class="blok">
+    <h2>Ronde {{ r.no }} <span class="klein">{{ r.flights|length }} flights ·
+      {{ r.entries|length }} deelnames · par {{ r.pars|sum }}</span></h2>
+    <form method="post" action="/admin/round/{{ r.id }}/pars">
+      <label for="pars{{ r.id }}">Pars van hole 1 t/m 18</label>
+      <input id="pars{{ r.id }}" type="text" name="pars" value="{{ r.pars|join(',') }}">
+      <button class="knop secundair" type="submit">Pars opslaan</button>
+    </form>
+    {% if competition.rounds|length > 1 %}
+    <label for="bord{{ r.id }}">Leaderboard van deze ronde</label>
+    <input id="bord{{ r.id }}" type="text" readonly onclick="this.select()"
+           value="{{ base_url }}/l/{{ competition.leaderboard_slug }}?r={{ r.no }}">
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="leegstaat">Nog geen ronden. Die ontstaan bij de
+    <a href="/admin/c/{{ competition.id }}?p=importeren">import</a>.</p>
+  {% endfor %}
+
+{% elif paneel == 'export' %}
+  <h1>Export</h1>
+  <p class="onder">Download dit na afloop. Dat is meteen je back-up.</p>
+  <div class="rij">
+    <a class="knop secundair" href="/admin/c/{{ competition.id }}/export.csv">Uitslag CSV</a>
+    <a class="knop secundair" href="/admin/c/{{ competition.id }}/audit.csv">Audit log CSV</a>
+  </div>
+  <p class="klein">De uitslag is een regel per speler per ronde, met alle holes. De audit log
+    bevat elke correctie en ingreep, met tijdstip en reden.</p>
+
+{% elif paneel == 'leegmaken' %}
+  <h1 class="gevaar">Kaart leegmaken</h1>
+  <p class="onder">Wist alle scores van één speler in één ronde. Dit is niet terug te draaien.</p>
+  {% if deelnames %}
+  <form method="post" action="/admin/entry/0/reset"
+        onsubmit="this.action='/admin/entry/' + this.entry_kiezer.value + '/reset'">
+    <label>Speler</label>
+    {{ spelerkeuze('entry_kiezer') }}
+    <label for="reden4">Reden</label>
+    <input id="reden4" type="text" name="reden">
+    {{ bevestig('code2') }}
+    <button class="knop gevaar" type="submit">Kaart leegmaken</button>
+  </form>
+  {% else %}<p class="leegstaat">Nog geen spelers.</p>{% endif %}
+
+{% elif paneel == 'links' %}
+  <h1 class="gevaar">Alle links vervangen</h1>
+  <p class="onder">Vervangt de persoonlijke link van elke speler in deze wedstrijd.</p>
+  <p class="klein">Oude links werken daarna niet meer en lopende sessies vallen eruit.
+    <strong>Scores blijven staan.</strong> Gebruik dit als de linkenlijst kwijt is.</p>
+  <form method="post" action="/admin/c/{{ competition.id }}/rotate">
+    <input type="hidden" name="scope" value="competition">
+    {{ bevestig('code3') }}
+    <button class="knop gevaar" type="submit">Alle links vervangen</button>
+  </form>
+
+{% elif paneel == 'wissen' %}
+  <h1 class="gevaar">Alles verwijderen</h1>
+  <p class="onder">Wist alle spelers, flights, ronden en scores van deze wedstrijd.</p>
+  <p class="klein">Bedoeld om opnieuw te beginnen met een verbeterd bestand. De wedstrijd
+    zelf en de leaderboardlink blijven bestaan. Dit is niet terug te draaien.</p>
+  {% if deelnames %}
+  <form method="post" action="/admin/c/{{ competition.id }}/wissen">
+    {{ bevestig('code4') }}
+    <button class="knop gevaar" type="submit">
+      {{ stand.deelnames }} deelnames en alle scores verwijderen</button>
+  </form>
+  {% else %}<p class="leegstaat">Er staat niets om te verwijderen.</p>{% endif %}
+{% endif %}
+
+</section>
 </div>
 {% endblock %}

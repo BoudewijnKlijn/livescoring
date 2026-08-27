@@ -319,8 +319,8 @@ def test_ronde_1_houdt_de_oude_kolommen(db, toernooi, client):
 
     assert kolommen[:3] == ["", "Speler", "+/-"]
     assert kolommen[-3:] == ["18", "In", "Tot"]
-    assert "Totaal" not in kolommen
-    assert "R1" not in kolommen
+    assert "Uit" in kolommen, "de eerste negen tellen op onder Uit"
+    assert "R1" not in kolommen, "één ronde heeft geen rondekolommen nodig"
 
 
 def test_totalen_per_ronde_staan_achter_de_holes(db, toernooi, client):
@@ -333,7 +333,7 @@ def test_totalen_per_ronde_staan_achter_de_holes(db, toernooi, client):
     kolommen = _kolommen(tekst)
 
     assert kolommen[:3] == ["", "Speler", "+/-"]
-    assert kolommen[-5:] == ["18", "In", "R1", "R2", "Totaal"]
+    assert kolommen[-5:] == ["18", "In", "R1", "R2", "Tot"]
     assert ">72<" in tekst, "het resultaat van ronde 1"
     assert ">90<" in tekst, "de ronde van vandaag"
     assert ">162<" in tekst, "beide ronden samen"
@@ -351,7 +351,7 @@ def test_elke_ronde_een_eigen_kolom(db, toernooi, client):
 
     kolommen = _kolommen(client.get(f"/l/{competition.leaderboard_slug}?r=3").text)
 
-    assert kolommen[-5:] == ["In", "R1", "R2", "R3", "Totaal"]
+    assert kolommen[-5:] == ["In", "R1", "R2", "R3", "Tot"]
 
 
 def test_parregel_telt_per_ronde_op(db, toernooi, client):
@@ -363,7 +363,8 @@ def test_parregel_telt_per_ronde_op(db, toernooi, client):
     tekst = client.get(f"/l/{competition.leaderboard_slug}?r=2").text
     parregel = tekst[tekst.index('<tr class="pars">') : tekst.index("</thead>")]
 
-    assert re.findall(r'<td class="som">(\d*)</td>', parregel)[-3:] == ["72", "72", "144"]
+    sommen = re.findall(r'<td class="som[^"]*">(\d*)</td>', parregel)
+    assert sommen[-3:] == ["72", "72", "144"], sommen
 
 
 def test_pagina_haalt_de_tabel_van_dezelfde_ronde_op(db, toernooi, client):
@@ -388,8 +389,8 @@ def test_tabelcache_houdt_de_ronden_uit_elkaar(db, toernooi, client):
     daarna = client.get(f"/l/{slug}/table?r=2").text
     nogmaals = client.get(f"/l/{slug}/table?r=1").text
 
-    assert "Totaal" not in eerst
-    assert "Totaal" in daarna
+    assert ">R1<" not in eerst
+    assert ">R1<" in daarna
     assert nogmaals == eerst, "dezelfde ronde komt wel uit de cache"
 
 
