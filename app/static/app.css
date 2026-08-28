@@ -280,6 +280,11 @@ table.kaarttabel th.kop {
 table.kaarttabel tr.holes th { background: var(--accent); color: #fff; height: 34px; font-size: 0.85rem; }
 table.kaarttabel tr.par td { background: #e2e8f0; color: var(--grijs); height: 28px; font-size: 0.8rem; }
 table.kaarttabel td.uit { background: #f8fafc; }
+/* Uit, In en Tot. `na-negen` zet een streep in de achtergrondkleur tussen hole 9 en 10,
+   zodat de twee negens los van elkaar lezen zonder dat de tabel uit elkaar valt. */
+table.kaarttabel .som { background: #cbd5e1; font-weight: 700; font-size: 0.9rem; }
+table.kaarttabel tr.holes th.som { background: var(--accent-donker); }
+table.kaarttabel .som.na-negen { border-right: 6px solid var(--achtergrond); }
 
 td.cel { position: relative; }
 td.cel input.score {

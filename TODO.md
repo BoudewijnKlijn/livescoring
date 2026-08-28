@@ -31,3 +31,27 @@ volledig in de afzender.
 **Tot die tijd.** Zeg bij de eerste wedstrijd tegen de spelers dat de bevestiging in de
 spambox kan belanden. De mail is een extraatje: de kaart is getekend en telt mee, of de mail
 nu aankomt of niet.
+
+## Persoonlijke links per mail naar de spelers
+
+**Wat.** Een knop op de beheerpagina die elke speler zijn eigen link mailt, zodat je ze niet
+meer met de hand hoeft te verspreiden. De mailkant staat er al: Brevo is aangesloten en
+`app/mail.py` doet het versturen. Dit is geen open keuze meer, alleen nog werk.
+
+**Waarom het nu nog niet zo is.** De bevestigingsmail na het tekenen was er eerst, en die
+gaat naar één speler tegelijk. Het rondsturen van de links is een tweede moment met een
+andere vorm: veel ontvangers in één keer, en met een inlogtoken erin.
+
+**Let op bij het bouwen.**
+
+- Doe het achter een aparte knop, niet automatisch bij de import. Tijdens het opzetten
+  importeer je hetzelfde bestand vaak een paar keer achter elkaar; automatisch versturen zou
+  de spelers dan evenzoveel keer mailen.
+- Het moet gebeuren in dezelfde request als de import of als *Nieuwe links maken*. Alleen de
+  hash van een token staat in de database, dus daarna zijn de links niet meer op te vragen.
+- Spelers zonder e-mailadres in de CSV blijven over. Laat het scherm zien wie dat zijn, want
+  die moet je nog steeds zelf een link geven.
+- Een veld van 80 spelers is 80 mails ineens. Dat past binnen de 300 per dag van Brevo,
+  maar tel het even na als je met meerdere ronden tegelijk werkt.
+- Doe dit pas na het eigen domein hierboven. Een bevestigingsmail in de spambox is jammer;
+  een inloglink in de spambox betekent dat een speler niet kan scoren.

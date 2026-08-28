@@ -2,12 +2,20 @@
 {% block title %}{{ entry.player.name }}{% endblock %}
 {% block header %}{% endblock %}
 
+{#- Een scorerij: negen holes, het uit-totaal, negen holes, het in-totaal en het totaal.
+    De drie totaalcellen dragen een id, zodat /api/score ze na elke score kan bijwerken. -#}
 {% macro scorerij(kaart, doel, bron, naam) %}
 <tr>
   <th class="kop">{{ naam }}</th>
-  {% for r in kaart.rows %}
+  {% for r in kaart.rows[:9] %}
     {% with row = r, entry = doel, source = bron %}{% include "_cel_kaal.html" %}{% endwith %}
   {% endfor %}
+  <td class="som na-negen" id="som-{{ doel.id }}-{{ bron }}-uit">{{ kaart.bron_totaal(bron, 1, 9) or '' }}</td>
+  {% for r in kaart.rows[9:] %}
+    {% with row = r, entry = doel, source = bron %}{% include "_cel_kaal.html" %}{% endwith %}
+  {% endfor %}
+  <td class="som" id="som-{{ doel.id }}-{{ bron }}-in">{{ kaart.bron_totaal(bron, 10, 18) or '' }}</td>
+  <td class="som" id="som-{{ doel.id }}-{{ bron }}-tot">{{ kaart.bron_totaal(bron) or '' }}</td>
 </tr>
 {% endmacro %}
 
@@ -46,11 +54,19 @@
   <table class="kaarttabel">
     <tr class="holes">
       <th class="kop">Hole</th>
-      {% for r in card.rows %}<th>{{ r.hole }}</th>{% endfor %}
+      {% for r in card.rows[:9] %}<th>{{ r.hole }}</th>{% endfor %}
+      <th class="som na-negen">Uit</th>
+      {% for r in card.rows[9:] %}<th>{{ r.hole }}</th>{% endfor %}
+      <th class="som">In</th>
+      <th class="som">Tot</th>
     </tr>
     <tr class="par">
       <th class="kop">Par</th>
-      {% for r in card.rows %}<td>{{ r.par }}</td>{% endfor %}
+      {% for r in card.rows[:9] %}<td>{{ r.par }}</td>{% endfor %}
+      <td class="som na-negen">{{ card.rows[:9] | sum(attribute='par') }}</td>
+      {% for r in card.rows[9:] %}<td>{{ r.par }}</td>{% endfor %}
+      <td class="som">{{ card.rows[9:] | sum(attribute='par') }}</td>
+      <td class="som">{{ card.rows | sum(attribute='par') }}</td>
     </tr>
     {{ scorerij(card, entry, 'self', entry.player.name) }}
     {% for doel, doelkaart in marked %}
@@ -67,7 +83,9 @@
 // Schuif naar de eerste hole die nog open staat.
 document.querySelectorAll('.scroller[data-scroll-naar]').forEach(function (s) {
   var hole = s.getAttribute('data-scroll-naar');
-  var kop = s.querySelector('tr.holes th:nth-child(' + (parseInt(hole, 10) + 1) + ')');
+  var h = parseInt(hole, 10);
+  // +1 voor de naamkolom, en vanaf hole 10 nog +1 voor de Uit-kolom ertussen.
+  var kop = s.querySelector('tr.holes th:nth-child(' + (h + 1 + (h >= 10 ? 1 : 0)) + ')');
   if (kop) { s.scrollLeft = Math.max(0, kop.offsetLeft - 90); }
 });
 

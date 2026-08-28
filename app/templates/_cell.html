@@ -1,2 +1,7 @@
-{#- Antwoord op POST /api/score: alleen de bijgewerkte cel. -#}
+{#- Antwoord op POST /api/score: de bijgewerkte cel, plus de drie totaalcellen van
+    dezelfde rij als out-of-band swap. Zonder die drie blijven Uit, In en Tot staan op de
+    stand van het laatste paginabezoek. -#}
 {% include "_cel_kaal.html" %}
+<td class="som na-negen" id="som-{{ entry.id }}-{{ source }}-uit" hx-swap-oob="true">{{ card.bron_totaal(source, 1, 9) or '' }}</td>
+<td class="som" id="som-{{ entry.id }}-{{ source }}-in" hx-swap-oob="true">{{ card.bron_totaal(source, 10, 18) or '' }}</td>
+<td class="som" id="som-{{ entry.id }}-{{ source }}-tot" hx-swap-oob="true">{{ card.bron_totaal(source) or '' }}</td>

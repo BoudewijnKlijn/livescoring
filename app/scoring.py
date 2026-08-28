@@ -139,6 +139,18 @@ class Card:
             return None
         return sum(r.agreed_strokes for r in rows)
 
+    def bron_totaal(self, source: str, eerste: int = 1, laatste: int = HOLES) -> int:
+        """Wat één bron invulde over een reeks holes. Nog lege holes tellen als niets.
+
+        Anders dan `nine` wacht dit niet op overeenstemming: op je eigen kaart wil je je
+        lopende totaal zien, ook als je marker nog een paar holes achterloopt.
+        """
+        return sum(
+            (r.self_strokes if source == "self" else r.marker_strokes) or 0
+            for r in self.rows
+            if eerste <= r.hole <= laatste
+        )
+
     @property
     def complete(self) -> bool:
         """Alle holes door beide bronnen ingevuld."""
