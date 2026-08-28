@@ -4,11 +4,11 @@
    Het hele veld staat op het bord. Wie nog niets bevestigd heeft staat onderaan, op de
    volgorde van de startlijst, en krijgt geen plaats: er valt nog niets te rangschikken. -#}
 {%- set meerdere = ronde > 1 -%}
-{%- macro negen(holes, som) -%}
+{%- macro negen(holes, som, uit=false) -%}
   {% for strokes, klasse in holes %}
     <td class="vak">{% if strokes is not none %}<span class="score {{ klasse }}">{{ strokes }}</span>{% endif %}</td>
   {% endfor %}
-  <td class="som">{{ som if som is not none else '' }}</td>
+  <td class="som{{ ' uit' if uit }}">{{ som if som is not none else '' }}</td>
 {%- endmacro -%}
 <div class="bord-scroll">
 <table class="bord">
@@ -18,7 +18,7 @@
       <th class="speler">Speler</th>
       <th class="topar">+/-</th>
       {% for h in range(1, 10) %}<th>{{ h }}</th>{% endfor %}
-      <th class="som">Uit</th>
+      <th class="som uit">Uit</th>
       {% for h in range(10, 19) %}<th>{{ h }}</th>{% endfor %}
       <th class="som">In</th>
       {% for no, _ in eerdere %}<th class="som">R{{ no }}</th>{% endfor %}
@@ -30,7 +30,7 @@
       <th class="speler">Par</th>
       <th class="topar"></th>
       {% for p in pars[:9] %}<td>{{ p }}</td>{% endfor %}
-      <td class="som">{{ pars[:9] | sum }}</td>
+      <td class="som uit">{{ pars[:9] | sum }}</td>
       {% for p in pars[9:] %}<td>{{ p }}</td>{% endfor %}
       <td class="som">{{ pars[9:] | sum }}</td>
       {% for _, par in eerdere %}<td class="som">{{ par }}</td>{% endfor %}
@@ -50,7 +50,7 @@
         {%- elif row.total_to_par %}{{ '%+d'|format(row.total_to_par) }}
         {%- else %}par{% endif -%}
       </td>
-      {{ negen(row.holes[:9], row.out) }}
+      {{ negen(row.holes[:9], row.out, uit=true) }}
       {{ negen(row.holes[9:], row.back) }}
       {% for eerder in row.earlier %}
       <td class="som">{{ eerder if eerder is not none else '' }}</td>

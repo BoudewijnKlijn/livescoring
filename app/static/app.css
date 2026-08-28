@@ -402,6 +402,7 @@ table.bord .som {
   background: #f3f3f3;
   border-left: 1px solid #cfcfcf;
 }
+table.bord .som.uit { border-right: 1px solid #cfcfcf; }
 table.bord .som.totaal { width: 50px; font-weight: 600; color: var(--tekst); }
 table.bord tr.pars .som { background: #f3f3f3; }
 
