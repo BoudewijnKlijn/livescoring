@@ -72,8 +72,8 @@ def test_bord_van_ronde_1_toont_alleen_ronde_1(db, toernooi):
 
     rijen = stand(db, competition, 1)
 
-    assert list(rijen) == ["Jan"], "de tweede ronde hoort hier niet bij"
     assert rijen["Jan"].round_no == 1
+    assert rijen["Piet"].thru == 0, "Piet staat er, maar zonder score uit ronde 2"
     assert rijen["Jan"].to_par == 0
     assert rijen["Jan"].total == 72
     assert rijen["Jan"].prev_total is None
@@ -121,7 +121,7 @@ def test_wie_nog_moet_starten_staat_er_met_zijn_eerdere_resultaat(db, toernooi):
 
     rijen = stand(db, competition, 2)
 
-    assert list(rijen) == ["Jan"]
+    assert list(rijen) == ["Jan", "Piet"], "Jan telt mee, Piet heeft nog niets"
     assert rijen["Jan"].prev_total == 72
     assert rijen["Jan"].thru == 0
     assert rijen["Jan"].to_par == 0
@@ -129,13 +129,21 @@ def test_wie_nog_moet_starten_staat_er_met_zijn_eerdere_resultaat(db, toernooi):
     assert rijen["Jan"].grand_total is None
 
 
-def test_wie_nergens_iets_heeft_staat_er_niet_bij(db, toernooi):
-    """Zonder score in deze ronde én zonder eerdere ronde geen regel."""
+def test_wie_nergens_iets_heeft_staat_onderaan(db, toernooi):
+    """Zonder score in deze ronde én zonder eerdere ronde toch een regel, maar achteraan.
+
+    Het bord is ook de startlijst: het veld moet er vanaf het eerste uur op staan, anders
+    kan niemand zien of hij is ingedeeld.
+    """
     competition, _ = toernooi
     vul_kaart(db, entry_van(db, "Jan", 2), 4)
 
-    assert list(stand(db, competition, 2)) == ["Jan"], "Piet heeft nergens iets"
-    assert stand(db, competition, 2)["Jan"].prev_total is None
+    rijen = stand(db, competition, 2)
+
+    assert list(rijen) == ["Jan", "Piet"], "Piet heeft nergens iets en zakt naar onderen"
+    assert rijen["Jan"].prev_total is None
+    assert not rijen["Piet"].heeft_resultaat
+    assert rijen["Piet"].playing, "nog niets ingevuld is geen uitvallen"
 
 
 def test_rangschikking_gaat_over_alle_ronden_samen(db, toernooi):
@@ -329,14 +337,29 @@ def test_uitvaller_zonder_score_in_ronde_2_houdt_zijn_regel(db, toernooi):
     assert jan.thru == 0
 
 
-def test_wie_alleen_een_status_heeft_en_verder_niets_staat_er_niet_bij(db, toernooi):
-    """Een uitvaller die nooit een score inleverde hoort niet op het bord."""
+def test_uitvaller_zonder_score_zakt_onder_wie_nog_moet_starten(db, toernooi):
+    """Een uitvaller die nooit een score inleverde staat helemaal onderaan."""
     competition, _ = toernooi
     entry_van(db, "Jan", 1).status = "wd"
     vul_kaart(db, entry_van(db, "Piet", 2), 4)
     db.commit()
 
-    assert list(stand(db, competition, 2)) == ["Piet"]
+    assert list(stand(db, competition, 2)) == ["Piet", "Jan"]
+
+
+def test_wie_nog_niets_heeft_houdt_de_volgorde_van_de_startlijst(db, wedstrijd):
+    """Vier spelers, niemand gestart: het bord is de startlijst, flight na flight."""
+    competition, _ = wedstrijd
+
+    assert [r.name for r in leaderboard(db, competition, 1)] == ["Jan", "Piet", "Anne", "Kees"]
+
+
+def test_een_score_tilt_je_boven_wie_nog_moet_starten(db, wedstrijd):
+    """Wie als enige iets bevestigd heeft, staat bovenaan; de rest houdt zijn volgorde."""
+    competition, _ = wedstrijd
+    vul_kaart(db, entry_van(db, "Anne"), 4, holes=1)
+
+    assert [r.name for r in leaderboard(db, competition, 1)] == ["Anne", "Jan", "Piet", "Kees"]
 
 
 # --- wat de pagina aan gegevens meekrijgt ----------------------------------------------

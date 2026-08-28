@@ -12,6 +12,32 @@
 {% endmacro %}
 
 {% block inhoud %}
+{#- Boven de kaart: waar je bent en wie wie markeert. Klein gezet: dit lees je één keer. -#}
+<div class="kaartkop">
+  <p class="wedstrijdregel">{{ entry.round.competition.name
+    }}<span class="punt">·</span><span class="ronde">Ronde {{ entry.round.no }}</span></p>
+  <dl class="rollen">
+    <div class="ik">
+      <dt>Speler</dt>
+      <dd>{{ entry.player.name }}</dd>
+    </div>
+    <div>
+      <dt>Jouw marker</dt>
+      <dd>
+        {%- if entry.marker %}{{ entry.marker.player.name }}
+        {%- else %}<span class="leeg">Nog niet toegewezen</span>{% endif -%}
+      </dd>
+    </div>
+    <div>
+      <dt>Jij markeert</dt>
+      <dd>
+        {%- for doel, _ in marked %}{{ doel.player.name }}{{ ", " if not loop.last }}
+        {%- else %}<span class="leeg">Niemand</span>{% endfor -%}
+      </dd>
+    </div>
+  </dl>
+</div>
+
 {% if entry.locked %}
   <p class="melding goed">Getekend en vergrendeld.</p>
 {% endif %}

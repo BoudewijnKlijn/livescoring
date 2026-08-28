@@ -213,6 +213,52 @@ textarea { min-height: 9rem; font-family: ui-monospace, monospace; font-size: 0.
 
 .scroller { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+/* Kaartkop: de wedstrijd, de ronde en wie wie markeert. De speler leest dit één keer en
+   werkt daarna alleen nog in het raster eronder, dus het staat klein en stil. De vorm komt
+   van de papieren kaart: gedrukte labels in kleinkapitaal, de naam ernaast. */
+.kaartkop {
+  background: var(--vlak);
+  border: 1px solid var(--lijn);
+  border-radius: 10px;
+  padding: 0.45rem 0.7rem 0.5rem;
+  margin-bottom: 0.45rem;
+}
+.wedstrijdregel {
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--lijn);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.wedstrijdregel .punt { color: var(--lijn-sterk); margin: 0 0.3rem; }
+.wedstrijdregel .ronde { font-weight: 400; color: var(--grijs); }
+
+.rollen { display: grid; gap: 0.2rem 1.8rem; margin: 0; }
+.rollen > div {
+  display: grid;
+  grid-template-columns: 5.4rem minmax(0, 1fr);
+  align-items: baseline;
+}
+.rollen dt {
+  font-size: 0.63rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #9a9a9a;
+}
+.rollen dd { margin: 0; font-size: 0.88rem; line-height: 1.35; }
+/* Je eigen regel draagt de kleur, zodat je in één blik ziet welke naam van jou is. */
+.rollen .ik dd { font-weight: 600; color: var(--accent); }
+.rollen .leeg { color: var(--grijs); }
+
+/* Ruimer scherm: de drie rollen naast elkaar, het label boven de naam. De kolommen mogen
+   krimpen, anders duwen drie lange namen de pagina breder dan het scherm. */
+@media (min-width: 680px) {
+  .rollen { grid-auto-flow: column; grid-auto-columns: minmax(0, max-content); }
+  .rollen > div { grid-template-columns: none; }
+}
+
 table.kaarttabel { border-collapse: collapse; }
 table.kaarttabel th, table.kaarttabel td {
   border: 1px solid var(--lijn);

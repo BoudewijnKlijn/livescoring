@@ -290,6 +290,11 @@ class LeaderboardRow:
         return self.status == "ok"
 
     @property
+    def heeft_resultaat(self) -> bool:
+        """Valt er iets te rangschikken: een bevestigde hole of een eerdere ronde?"""
+        return self.thru > 0 or self.prev_total is not None
+
+    @property
     def prev_total(self) -> int | None:
         """Slagen uit alle eerdere ronden samen, of None als de speler er geen speelde."""
         bekend = [t for t in self.earlier if t is not None]
@@ -306,6 +311,19 @@ class LeaderboardRow:
         if self.total is None:
             return None
         return (self.prev_total or 0) + self.total
+
+
+def _rangorde(row: LeaderboardRow) -> tuple[int, int, int, str]:
+    """Sorteersleutel van het bord: eerst wie een resultaat heeft, dan wie nog moet beginnen.
+
+    Wie nog geen bevestigde hole heeft valt niet te rangschikken. Zijn stand is nul, en op
+    stand gesorteerd zou hij tussen de leiders belanden. Die spelers krijgen daarom allemaal
+    dezelfde sleutel en houden door de stabiele sort de volgorde waarin ze in de database
+    staan, oftewel die van de startlijst. Uitvallers zakken hoe dan ook naar de bodem.
+    """
+    if not row.heeft_resultaat:
+        return (1 if row.playing else 3, 0, 0, "")
+    return (0 if row.playing else 2, row.total_to_par, -row.thru, row.name)
 
 
 def huidige_ronde(db: Session, competition: Competition, keuze: int | None = None) -> int:
@@ -389,8 +407,8 @@ def leaderboard(
     Een hole telt pas mee als speler en marker dezelfde score invulden. Zolang een ronde
     loopt staat er geen totaal, alleen de stand ten opzichte van par. Vanaf ronde 2 draagt
     elke speler het resultaat van zijn eerdere ronden mee: daarop wordt gerangschikt, ook
-    als hij vandaag nog moet starten. Wie niets heeft en nergens vandaan komt, staat er niet
-    bij.
+    als hij vandaag nog moet starten. Het hele veld van deze ronde staat op het bord, ook
+    wie nog niets heeft: die spelers staan onderaan, op de volgorde van de startlijst.
     """
     rnd = db.scalar(
         select(Round).where(Round.competition_id == competition.id, Round.no == round_no)
@@ -400,11 +418,10 @@ def leaderboard(
     eerder = _eerdere_ronden(db, competition, round_no)
     leeg = Eerder([None] * len(eerdere_rondenummers(competition, round_no)), 0, "ok")
     rows: list[LeaderboardRow] = []
-    for entry in db.scalars(select(Entry).where(Entry.round_id == rnd.id)):
+    # Op id, want dat is de volgorde waarin de startlijst is ingelezen: flight na flight.
+    for entry in db.scalars(select(Entry).where(Entry.round_id == rnd.id).order_by(Entry.id)):
         card = build_card(entry)
         vorig = eerder.get(entry.player_id, leeg)
-        if not card.started and not vorig.gespeeld:
-            continue
         rows.append(
             LeaderboardRow(
                 name=entry.player.name,
@@ -423,5 +440,5 @@ def leaderboard(
                 prev_to_par=vorig.to_par,
             )
         )
-    rows.sort(key=lambda r: (not r.playing, r.total_to_par, -r.thru, r.name))
+    rows.sort(key=_rangorde)
     return rows

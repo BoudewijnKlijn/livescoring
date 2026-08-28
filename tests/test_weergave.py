@@ -81,7 +81,7 @@ def test_scores_krijgen_een_blokje_naar_hun_resultaat(db, toernooi, client):
 
     assert '<span class="score eagle">3</span>' in tekst
     assert "Eagle of beter" in tekst, "de kleursleutel staat onder het bord"
-    assert tekst.count('<td class="vak"></td>') == 17, "lege holes krijgen geen blokje"
+    assert tekst.count('<td class="vak"></td>') == 35, "lege holes krijgen geen blokje"
 
 
 def test_de_pagina_polt_de_tabel_van_dezelfde_ronde(db, toernooi, client):
@@ -119,6 +119,42 @@ def test_uitvaller_staat_er_zonder_plaats_bij(db, toernooi, client):
     rijen = re.findall(r'<tr class="([^"]*)">.*?class="speler">\s*([^<\n]+)', tekst, re.S)
     assert ("uitgevallen", "Jan") in [(k.strip(), n.strip()) for k, n in rijen]
     assert '<span class="pil rood">WD</span>' in tekst
+
+
+def test_wie_nog_niets_heeft_krijgt_geen_plaats(db, toernooi, client):
+    """Een nummer naast een lege regel zou een rangschikking suggereren die er niet is."""
+    competition, _ = toernooi
+    vul_kaart(db, entry_van(db, "Jan", 1), 4)
+
+    tekst = _bord(client, competition, 1)
+
+    assert tekst.count('<td class="pos">1</td>') == 1, "alleen Jan staat gerangschikt"
+    assert tekst.count('<td class="pos"></td>') == 1, "Piet staat er zonder plaats"
+
+
+# --- de scorekaart van de speler -------------------------------------------------------
+
+
+def test_kaartkop_noemt_de_wedstrijd_de_ronde_en_de_rollen(db, wedstrijd, als_speler):
+    """Boven de kaart staat waar je bent, wie jou markt en wie jij markt."""
+    pagina = als_speler("Jan").get("/me/card").text
+
+    kop = pagina[pagina.index('class="kaartkop"') : pagina.index("</dl>")]
+    assert "Testwedstrijd" in kop
+    assert "Ronde 1" in kop
+    labels = re.findall(r"<dt>(.*?)</dt>", kop)
+    velden = re.findall(r"<dd>(.*?)</dd>", kop, re.S)
+    namen = [" ".join(re.sub(r"<[^>]+>", "", d).split()) for d in velden]
+    assert labels == ["Speler", "Jouw marker", "Jij markeert"]
+    assert namen == ["Jan", "Piet", "Piet"], "in een tweebal markeren ze elkaar"
+
+
+def test_de_kaart_zelf_blijft_het_grootst(db, wedstrijd, als_speler):
+    """De kop is er om één keer te lezen; de invoervakken zijn het werk."""
+    pagina = als_speler("Jan").get("/me/card").text
+
+    assert pagina.index('class="kaartkop"') < pagina.index('class="kaarttabel"')
+    assert 'class="kop"' in pagina, "de kaart houdt zijn eigen namenkolom"
 
 
 # --- het beheerscherm ------------------------------------------------------------------

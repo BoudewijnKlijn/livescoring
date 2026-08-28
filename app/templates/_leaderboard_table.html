@@ -1,6 +1,8 @@
 {#- Live stand van één ronde als scorekaart: alleen holes waarover speler en marker het
    eens zijn. Achter de holes staat het totaal van elke ronde tot nu toe, en vanaf ronde 2
-   daarachter het totaal over alle ronden samen. De +/- kolom telt dan ook alles op. -#}
+   daarachter het totaal over alle ronden samen. De +/- kolom telt dan ook alles op.
+   Het hele veld staat op het bord. Wie nog niets bevestigd heeft staat onderaan, op de
+   volgorde van de startlijst, en krijgt geen plaats: er valt nog niets te rangschikken. -#}
 {%- set meerdere = ronde > 1 -%}
 {%- macro negen(holes, som) -%}
   {% for strokes, klasse in holes %}
@@ -39,12 +41,12 @@
   <tbody>
     {% for row in rows %}
     <tr class="{% if not row.playing %}uitgevallen{% endif %}">
-      <td class="pos">{{ offset + loop.index if row.playing else '' }}</td>
+      <td class="pos">{{ offset + loop.index if row.playing and row.heeft_resultaat else '' }}</td>
       <td class="speler">
         {{ row.name }}{% if not row.playing %} <span class="pil rood">{{ row.status|upper }}</span>{% endif %}
       </td>
       <td class="topar {% if row.total_to_par < 0 %}onder{% endif %}">
-        {%- if not row.thru and row.prev_total is none %}&ndash;
+        {%- if not row.heeft_resultaat %}&ndash;
         {%- elif row.total_to_par %}{{ '%+d'|format(row.total_to_par) }}
         {%- else %}par{% endif -%}
       </td>
@@ -59,7 +61,7 @@
       {% endif %}
     </tr>
     {% else %}
-    <tr><td class="speler leeg" colspan="99">Nog niemand gestart.</td></tr>
+    <tr><td class="speler leeg" colspan="99">Nog geen spelers in deze ronde.</td></tr>
     {% endfor %}
   </tbody>
 </table>

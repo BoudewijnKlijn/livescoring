@@ -157,7 +157,7 @@ def test_onmogelijke_score_wordt_geweigerd(db, wedstrijd, als_speler):
 
 
 def test_leaderboard_toont_alleen_scores_waar_beiden_het_eens_zijn(db, wedstrijd, als_speler):
-    """Eens = zichtbaar en gekleurd naar par; oneens = leeg; niet gestart = geen regel."""
+    """Eens = zichtbaar en gekleurd naar par; oneens = leeg; niet gestart = lege regel."""
     from app.scoring import leaderboard
 
     competition, _ = wedstrijd
@@ -183,8 +183,8 @@ def test_leaderboard_toont_alleen_scores_waar_beiden_het_eens_zijn(db, wedstrijd
     assert rijen["Jan"].to_par == -2
     assert rijen["Jan"].thru == 1
     assert rijen["Jan"].total is None               # ronde loopt nog
-    assert "Anne" not in rijen                      # nog niet gestart
-    assert "Piet" not in rijen                      # zelf nog niets ingevuld
+    assert not rijen["Anne"].heeft_resultaat        # nog niet gestart, wel op het bord
+    assert not rijen["Piet"].heeft_resultaat        # zelf nog niets ingevuld
 
 
 def test_geweigerde_score_geeft_opgeslagen_waarde_terug(db, wedstrijd, als_speler):
