@@ -15,3 +15,9 @@ services:
         generateValue: true
       - key: COOKIE_SECURE
         value: "true"
+      - key: BREVO_API_KEY
+        sync: false          # leeg laten = geen bevestigingsmail
+      - key: MAIL_FROM
+        sync: false          # het geverifieerde afzenderadres bij Brevo
+      - key: MAIL_FROM_NAME
+        value: Wedstrijdleiding

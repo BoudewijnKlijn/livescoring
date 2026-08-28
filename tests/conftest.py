@@ -10,6 +10,11 @@ os.environ["DATABASE_URL"] = f"{BASE}/{TEST_DB}"
 os.environ["ADMIN_PASSWORD"] = "testwachtwoord"
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["COOKIE_SECURE"] = "false"  # TestClient praat http, geen https
+# Mail hard uit. Zonder dit pikken de tests de sleutel uit .env.local op en stuurt elke test
+# die /me/sign aanroept een echte mail naar een verzonnen adres als jan@x.nl. Die bouncen,
+# en bounces kosten je de reputatie van je afzender, precies wanneer je hem nodig hebt.
+os.environ["BREVO_API_KEY"] = ""
+os.environ["MAIL_FROM"] = ""
 
 import psycopg  # noqa: E402
 import pytest  # noqa: E402

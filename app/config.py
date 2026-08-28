@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     base_url: str = "http://localhost:8000"
     cookie_secure: bool = False
 
+    # Bevestigingsmail na het tekenen. Leeg = uit, en dan wordt er niets verstuurd.
+    brevo_api_key: str = ""
+    mail_from: str = ""
+    mail_from_name: str = "Wedstrijdleiding"
+
     model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
 
 

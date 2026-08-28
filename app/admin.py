@@ -44,16 +44,15 @@ def _links_page(
 
     De tekst is tabgescheiden, want dat plakt in Excel meteen in kolommen.
     """
-    rijen = [
-        {"naam": naam, "ronde": ronde, "link": f"{settings.base_url}/t/{token}"}
+    regels = [
+        f"{naam}\t{ronde}\t{settings.base_url}/t/{token}"
         for naam, ronde, token in sorted(links, key=lambda x: (x[1], x[0]))
     ]
-    kop = "Naam\tRonde\tLink"
-    tekst = "\n".join([kop] + [f"{r['naam']}\t{r['ronde']}\t{r['link']}" for r in rijen])
+    tekst = "\n".join(["Naam\tRonde\tLink"] + regels)
     return templates.TemplateResponse(
         request,
         "admin_links.html",
-        {"competition": competition, "rijen": rijen, "tekst": tekst, "note": note},
+        {"competition": competition, "tekst": tekst, "note": note},
     )
 
 

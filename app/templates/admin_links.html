@@ -17,28 +17,39 @@
   <textarea id="alles" readonly>{{ tekst }}</textarea>
 </div>
 
-<table class="lijst">
-  <tr><th>Speler</th><th>Ronde</th><th>Link</th><th></th></tr>
-  {% for r in rijen %}
-  <tr>
-    <td>{{ r.naam }}</td>
-    <td>{{ r.ronde }}</td>
-    <td><input type="text" readonly value="{{ r.link }}" onclick="this.select()"></td>
-    <td><button class="knop secundair" type="button"
-                onclick="kopieer({{ r.link | tojson }}, this)">Kopieer</button></td>
-  </tr>
-  {% endfor %}
-</table>
-
 <script>
 function kopieer(tekst, knop) {
   var was = knop.textContent;
-  navigator.clipboard.writeText(tekst).then(function () {
-    knop.textContent = 'Gekopieerd';
-    setTimeout(function () { knop.textContent = was; }, 1500);
-  }, function () {
-    knop.textContent = 'Kopiëren lukt niet, selecteer zelf';
-  });
+  function klaar(gelukt) {
+    knop.textContent = gelukt ? 'Gekopieerd' : 'Lukt niet, selecteer zelf';
+    setTimeout(function () { knop.textContent = was; }, 1800);
+  }
+  // navigator.clipboard bestaat alleen op https en op localhost. Open je de beheerpagina op
+  // een gewoon http-adres, bijvoorbeeld het LAN-IP van je laptop, dan is hij er niet en gooit
+  // de aanroep meteen een fout: dan is het verborgen tekstvak hieronder de enige weg.
+  if (window.isSecureContext && navigator.clipboard) {
+    navigator.clipboard.writeText(tekst).then(
+      function () { klaar(true); },
+      function () { klaar(viaVeld(tekst)); }
+    );
+  } else {
+    klaar(viaVeld(tekst));
+  }
+}
+function viaVeld(tekst) {
+  var veld = document.createElement('textarea');
+  veld.value = tekst;
+  veld.setAttribute('readonly', '');
+  veld.style.position = 'fixed';
+  veld.style.top = '0';
+  veld.style.opacity = '0';
+  document.body.appendChild(veld);
+  veld.select();
+  veld.setSelectionRange(0, veld.value.length);  // iOS negeert select() zonder dit
+  var gelukt = false;
+  try { gelukt = document.execCommand('copy'); } catch (e) { gelukt = false; }
+  document.body.removeChild(veld);
+  return gelukt;
 }
 function download() {
   var csv = document.getElementById('alles').value.split('\t').join(';');

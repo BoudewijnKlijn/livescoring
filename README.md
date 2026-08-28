@@ -10,7 +10,7 @@ lossen verschillen op en tekenen hun kaart. Toeschouwers volgen de stand live.
 docker compose up -d                          # Postgres op poort 5434
 uv run uvicorn app.main:app --reload --port 8001   # http://localhost:8001
 uv run python -m app.seed --demo              # demo-wedstrijd + 8 links
-uv run pytest                                 # 15 tests
+uv run pytest                                 # de testsuite
 uv run ruff check app tests                   # lint
 ```
 
@@ -35,6 +35,9 @@ kunt de hele flow in je eentje doorlopen, inclusief het forceren van een conflic
 | `ADMIN_PASSWORD` | ja | Wachtwoord voor `/admin/login`. |
 | `BASE_URL` | ja | Publieke URL zonder slash op het eind. Staat in de gedeelde links. |
 | `COOKIE_SECURE` | productie | `true` achter HTTPS, `false` lokaal. |
+| `BREVO_API_KEY` | nee | Sleutel voor de bevestigingsmail. Leeg = geen mail. Zie hieronder. |
+| `MAIL_FROM` | bij mail | Het afzenderadres dat je bij Brevo geverifieerd hebt. |
+| `MAIL_FROM_NAME` | nee | Naam voor de afzender. Standaard `Wedstrijdleiding`. |
 
 ## CSV-import
 
@@ -69,6 +72,48 @@ Bij één fout wordt er niets geïmporteerd. Opnieuw importeren mag, en gaat zo:
   kun je één flight opnieuw aanleveren zonder de rest erbij te plakken.
 - Wisselt een speler van marker terwijl de oude marker al scores schreef, dan blijven die
   scores staan: die holes zijn echt samen gelopen. De nieuwe marker kan ze overschrijven.
+
+## Bevestigingsmail
+
+Tekent een speler zijn kaart, dan krijgt hij zijn scores per mail: het totaal, de twee
+negens hole voor hole en de link naar de stand. Dat is meteen zijn eigen bewijs van wat er
+is ingeleverd. Spelers zonder e-mailadres in de CSV krijgen niets, de rest van de flight
+wel.
+
+De mail gaat de deur uit *nadat* de speler zijn bevestiging op het scherm heeft. Ligt Brevo
+plat, dan blijft de kaart gewoon getekend en staat de fout in de log. Tekenen mag nooit
+stukgaan op een mailserver.
+
+### Waarom niet gewoon Gmail
+
+Omdat het niet werkt waar deze app draait. Render blokkeert op de gratis web services sinds
+26 september 2025 al het uitgaande verkeer naar poort 25, 465 en 587. `smtplib` met een
+Gmail-app-wachtwoord doet het dus prima op je laptop en faalt stil op Render, precies op de
+dag dat het moet werken. Brevo wordt daarom over HTTPS aangesproken, en poort 443 is niet
+geblokkeerd. Wil je toch SMTP, dan kost dat de goedkoopste betaalde Render-instance of een
+verhuizing naar Fly.io.
+
+### Brevo instellen
+
+1. Maak een gratis account op [brevo.com](https://www.brevo.com). Geen creditcard nodig,
+   300 mails per dag, en dat blijft gratis. Ruim genoeg: elke speler krijgt één mail per
+   ronde.
+2. Ga naar **Senders, Domains & Dedicated IPs → Senders → Add a sender** en zet daar het
+   adres neer waar de mail vandaan moet komen, bijvoorbeeld je eigen adres of dat van de
+   wedstrijdcommissie. Brevo stuurt er een bevestigingsmail heen; klik die link aan. Een
+   eigen domein heb je hiervoor niet nodig, één geverifieerd adres is genoeg. Dit adres
+   wordt `MAIL_FROM`, precies zoals je het daar invult.
+3. Ga naar **SMTP & API → API Keys → Generate a new API key**. Kopieer de sleutel meteen:
+   Brevo laat hem net als de spelerslinks maar één keer zien. Dit wordt `BREVO_API_KEY`.
+4. Zet `BREVO_API_KEY` en `MAIL_FROM` in het Render-dashboard, en lokaal in `.env.local`.
+   Zonder sleutel is de mail uit, dus je tests en je lokale werk sturen nooit per ongeluk
+   iets naar echte spelers.
+5. Test het een keer voor de wedstrijd: importeer een CSV met je eigen adres erin, vul een
+   kaart en teken hem. Komt er niets aan, kijk dan in de Render-logs (`Mail naar ...`) en in
+   het **Transactional → Logs**-scherm van Brevo. De meest gemaakte fout is een `MAIL_FROM`
+   die niet exact het geverifieerde adres is: Brevo weigert dat met een 400.
+
+Zet je de mail liever uit op de dag zelf, haal dan `BREVO_API_KEY` weg en herstart.
 
 ## Deployen (Render + Supabase, gratis)
 

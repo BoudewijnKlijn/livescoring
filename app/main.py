@@ -7,7 +7,7 @@ import time
 from contextlib import asynccontextmanager
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Form, Request, Response
+from fastapi import BackgroundTasks, FastAPI, Form, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -25,6 +25,7 @@ from app.auth import (
     login_player,
 )
 from app.export import router as export_router
+from app.mail import kaart_bericht, verstuur
 from app.models import DEFAULT_PARS, Competition, Entry, create_all
 from app.scoring import (
     ScoreError,
@@ -175,14 +176,24 @@ def do_sign(
     request: Request,
     entry: CurrentEntry,
     db: DbSession,
+    achtergrond: BackgroundTasks,
     akkoord: str = Form(""),
 ) -> Response:
-    """Onderteken de kaart, mits compleet en zonder conflicten."""
+    """Onderteken de kaart, mits compleet en zonder conflicten.
+
+    De bevestigingsmail gaat als achtergrondtaak de deur uit, dus pas nadat de speler zijn
+    antwoord al heeft. Een trage of kapotte mailprovider houdt hem zo niet op en kan het
+    tekenen niet alsnog laten mislukken. Het bericht wordt hier gebouwd, met de sessie nog
+    open: de achtergrondtaak krijgt alleen platte tekst mee en raakt de database niet meer.
+    """
     if akkoord != "ja":
         error = "Zet eerst het vinkje dat de scores kloppen."
     else:
         try:
             sign_card(db, entry)
+            bericht = kaart_bericht(entry, build_card(entry))
+            if bericht:
+                achtergrond.add_task(verstuur, bericht)
             return RedirectResponse("/me/card", status_code=303)
         except ScoreError as exc:
             error = str(exc)
