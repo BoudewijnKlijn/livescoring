@@ -10,6 +10,7 @@ lossen verschillen op en tekenen hun kaart. Toeschouwers volgen de stand live.
 docker compose up -d                          # Postgres op poort 5434
 uv run uvicorn app.main:app --reload --port 8001   # http://localhost:8001
 uv run python -m app.seed --demo              # demo-wedstrijd + 8 links
+uv run python -m app.seed --demo --scores     # zestien spelers met een ingevulde stand
 uv run pytest                                 # de testsuite
 uv run ruff check app tests                   # lint
 ```
@@ -24,7 +25,9 @@ Let op de driver in `DATABASE_URL`: dit project gebruikt psycopg 3, dus het sche
 oudere driver en die zit hier niet in.
 
 De demo maakt vier spelers in twee ronden. Open de links van ronde 1 in vier tabbladen en je
-kunt de hele flow in je eentje doorlopen, inclusief het forceren van een conflict.
+kunt de hele flow in je eentje doorlopen, inclusief het forceren van een conflict. Met
+`--scores` krijg je in plaats daarvan zestien spelers in vier flights, ronde 1 uitgespeeld en
+ronde 2 halverwege, plus een uitvaller en een betwiste hole. Dat is het bord in vol bedrijf.
 
 ## Environment variables
 
@@ -133,8 +136,9 @@ dezelfde `DATABASE_URL`.
 
 1. Maak de wedstrijd aan op `/admin` en plak de CSV.
 2. **Kopieer meteen de linkenlijst.** Alleen de hash van een token staat in de database, dus
-   de links zijn achteraf niet meer op te vragen. Kwijt? Gebruik *Nieuwe links maken*: dat
-   maakt verse links en laat alle scores staan.
+   de links zijn achteraf niet meer op te vragen. Kwijt? Gebruik *Alle links vervangen*: dat
+   maakt verse links voor de hele wedstrijd en laat alle scores staan. Gaat het om één
+   speler, dan doet *Nieuwe link* precies die ene.
 3. Deel de leaderboard-link met toeschouwers. Passen niet alle spelers op het scherm, dan
    toont het bord er 25 tegelijk en springt het elke minuut naar de volgende groep, net zo
    lang tot het weer vooraan begint. Een ander aantal per scherm zet je in de link:
@@ -142,13 +146,18 @@ dezelfde `DATABASE_URL`.
    link voor je. Alle schermen die dezelfde wedstrijd tonen lopen gelijk, want welk groepje
    aan de beurt is volgt uit de klok van de server.
    Het bord toont één ronde tegelijk. De gewone link volgt vanzelf de ronde waarin het laatst
-   is gescoord; met `?r=2` zet je hem vast op een ronde. Vanaf ronde 2 staan er twee kolommen
-   bij: *Vorig* is het totaal uit de eerdere ronden, *Totaal* het aantal slagen over alles
-   samen. De +/- kolom telt vanaf dan alle ronden op, en daarop wordt gerangschikt. Wie
-   vandaag nog moet starten staat er dus al bij, met zijn eerdere resultaat.
+   is gescoord; met `?r=2` zet je hem vast op een ronde. Achter de twee negens staat *Tot*,
+   het totaal van de getoonde ronde. Vanaf ronde 2 komt er per eerdere ronde een kolom bij,
+   genoemd naar het rondenummer: op het bord van ronde 2 staat *R1* met het resultaat van
+   ronde 1, dan *R2* voor vandaag, en *Tot* voor alles samen. De +/- kolom telt vanaf dan
+   alle ronden op, en daarop wordt gerangschikt. Wie vandaag nog moet starten staat er dus
+   al bij, met zijn eerdere resultaat.
 4. Op de beheerpagina staat de spelerslijst: wie is geïmporteerd, in welke flight, met
    welke marker en hoe ver ze zijn. De voortgang per flight volg je op het leaderboard.
 5. Na afloop: *Uitslag CSV* en *Audit log CSV* downloaden. Dat is meteen je back-up.
+6. Met *Verbergen* schuift een afgelopen wedstrijd op `/admin` naar de lijst met verborgen
+   wedstrijden, zodat je het overzicht houdt. Er wordt niets verwijderd, het leaderboard
+   blijft werken en je kunt hem weer terugzetten.
 
 ## Correcties tijdens de wedstrijd
 
@@ -156,12 +165,17 @@ Alles staat op de beheerpagina van de wedstrijd:
 
 - **Score corrigeren** overschrijft beide invoeren van één hole, ook op een getekende kaart.
   Reden is verplicht en komt in de audit log.
-- **Status** zet iemand op DQ, NR of WD. Die valt dan uit de rangschikking.
-- **Ontgrendelen** maakt een getekende kaart weer bewerkbaar.
-- **Nieuwe links maken** vervangt links (bijvoorbeeld bij een gewijzigde flight of een
-  verloren telefoon) zonder scores te raken.
-- **Kaart leegmaken** wist wél alle scores. Vraagt om een viercijferige bevestigingscode.
-- **Alle spelers en scores verwijderen** maakt de wedstrijd leeg zodat je een verbeterd
+- **Status wijzigen** zet iemand op DQ, NR of WD. Die valt dan uit de rangschikking.
+- **Kaart ontgrendelen** maakt een getekende kaart weer bewerkbaar.
+- **Ronden** zet de achttien pars van een ronde, komma- of spatiegescheiden. Standaard staan
+  de pars van de thuisbaan er al in.
+- **Nieuwe link** geeft één speler een verse link, bijvoorbeeld bij een verloren telefoon.
+  **Alle links vervangen** doet dat voor de hele wedstrijd, voor als de linkenlijst kwijt is.
+  Scores blijven in beide gevallen staan, en allebei vragen ze de bevestigingscode: een
+  vervangen link werkt niet meer en lopende sessies vallen eruit.
+- **Kaart leegmaken** wist wél alle scores. Vraagt om een bevestigingscode van vier letters
+  die je overtypt.
+- **Alles verwijderen** wist alle spelers, flights, ronden en scores, zodat je een verbeterd
   CSV-bestand kunt importeren. De wedstrijd zelf en de leaderboardlink blijven bestaan.
   Vraagt ook om de bevestigingscode. Gaat het maar om één speler die niet meespeelt, zet
   hem dan op WD, NR of DQ: dan blijft zijn kaart bewaard.
