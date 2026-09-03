@@ -55,3 +55,16 @@ andere vorm: veel ontvangers in één keer, en met een inlogtoken erin.
   maar tel het even na als je met meerdere ronden tegelijk werkt.
 - Doe dit pas na het eigen domein hierboven. Een bevestigingsmail in de spambox is jammer;
   een inloglink in de spambox betekent dat een speler niet kan scoren.
+
+## `player.id` en `entry.id` zijn makkelijk te verwisselen
+
+**Wat.** Twee tabellen die allebei vanaf 1 tellen, en een `entry` heet in de wandelgangen
+ook gewoon "speler". Een los getal zegt niet uit welke van de twee het komt.
+
+**Waarom het uitmaakt.** In de audit log stond `player:39` terwijl er een entry-id bedoeld
+werd. Entry 39 en speler 39 waren twee verschillende deelnemers, dus die regels wezen de
+verkeerde persoon aan. De log is opgelost (`entry:39`), maar de valkuil zelf zit er nog.
+
+**Hoe.** Geen herschrijving nodig. Bij elk nieuw veld, logregel of scherm dat een id
+opslaat of toont: zet in de naam welke tabel het is (`entry_id`, niet `speler`), en zet er
+in tekst het soort voor, zoals de audit log nu doet.

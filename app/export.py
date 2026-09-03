@@ -71,22 +71,41 @@ def export_csv(
     return _csv_response(kop, rijen, f"uitslag-{competition.id}.csv")
 
 
+AUDIT_KOP = ["tijdstip", "wie", "actie", "details"]
+
+
+def _audit_rijen(db: DbSession, waar) -> list[list]:
+    """De logregels die aan `waar` voldoen, op tijd.
+
+    Regels over de installatie zelf hangen aan geen enkele wedstrijd. Elke voorwaarde hier
+    stelt een eis aan `competition_id`, dus die vallen er vanzelf buiten.
+    """
+    return [
+        [row.at.isoformat(timespec="seconds"), row.actor, row.action, row.detail]
+        for row in db.scalars(select(AuditLog).where(waar).order_by(AuditLog.at))
+    ]
+
+
+@router.get("/c/{competition_id}/audit.csv")
+def export_competition_audit(
+    competition_id: int, db: DbSession, gebruiker: CurrentAdmin
+) -> StreamingResponse:
+    """De audit log van één wedstrijd: elke correctie en ingreep, met tijdstip en reden.
+
+    Dit is de vraag die je stelt als er iets misging -- wat is er in déze wedstrijd
+    gebeurd -- en pas sinds de regels hun wedstrijd zelf noemen is die te beantwoorden.
+    Het wissen van alle spelers raakt dit niet: de wedstrijd blijft staan, en zijn log dus
+    ook.
+    """
+    competition = get_competition(db, competition_id, gebruiker)
+    rijen = _audit_rijen(db, AuditLog.competition_id == competition.id)
+    return _csv_response(AUDIT_KOP, rijen, f"auditlog-{competition.id}.csv")
+
+
 @router.get("/audit.csv")
 def export_audit(db: DbSession, gebruiker: CurrentAdmin) -> StreamingResponse:
-    """De audit log van alle eigen wedstrijden: elke correctie en ingreep, met reden.
-
-    Elke regel noemt zijn wedstrijd, dus dit filtert op de wedstrijden van deze
-    wedstrijdleider. Het wissen van alle spelers raakt dat niet: de wedstrijd zelf blijft
-    staan, en daarmee de regels erover. Wat over de installatie gaat hangt aan geen enkele
-    wedstrijd en valt er via de join dus buiten.
-    """
-    rijen = [
-        [row.at.isoformat(timespec="seconds"), row.actor, row.action, row.detail]
-        for row in db.scalars(
-            select(AuditLog)
-            .join(Competition, AuditLog.competition_id == Competition.id)
-            .where(Competition.user_id == gebruiker.id)
-            .order_by(AuditLog.at)
-        )
-    ]
-    return _csv_response(["tijdstip", "wie", "actie", "details"], rijen, "auditlog.csv")
+    """De audit log van al je wedstrijden in één bestand, voor als je niet weet waar te
+    zoeken. Voor één wedstrijd is er de export op het beheerscherm van die wedstrijd."""
+    eigen = select(Competition.id).where(Competition.user_id == gebruiker.id)
+    rijen = _audit_rijen(db, AuditLog.competition_id.in_(eigen))
+    return _csv_response(AUDIT_KOP, rijen, "auditlog.csv")

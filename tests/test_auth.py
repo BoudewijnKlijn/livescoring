@@ -272,7 +272,7 @@ def test_lege_spelerkeuze_vervangt_niet_stilzwijgend_alle_links(db, wedstrijd, c
 
 
 def test_uitslag_is_van_deze_wedstrijd_en_de_auditlog_van_alle(db, wedstrijd, client):
-    """De uitslag hoort bij één wedstrijd. De audit log staat los en heeft geen id nodig."""
+    """De uitslag hoort bij één wedstrijd. De audit log kan allebei: per wedstrijd of alles."""
     competition, _ = wedstrijd
     login_admin(client)
 
@@ -284,4 +284,4 @@ def test_uitslag_is_van_deze_wedstrijd_en_de_auditlog_van_alle(db, wedstrijd, cl
     assert uitslag.headers["content-disposition"].endswith(f'uitslag-{competition.id}.csv"')
     assert auditlog.status_code == 200
     assert "tijdstip;wie;actie;details" in auditlog.text
-    assert client.get(f"/admin/c/{competition.id}/audit.csv").status_code == 404
+    assert client.get(f"/admin/c/{competition.id}/audit.csv").status_code == 200

@@ -11,6 +11,7 @@ import json
 
 from sqlalchemy import inspect, select, text
 
+from app.importer import create_competition
 from app.models import AuditLog, User, create_all, engine, now
 from tests.conftest import WACHTWOORD_HASH
 from tests.helpers import LEIDING, WACHTWOORD, entry_van, login_admin, vul_kaart
@@ -161,3 +162,30 @@ def test_de_oude_log_verhuist_naar_de_wedstrijd(db, wedstrijd, gebruiker):
     assert regels["confirmed"].competition_id is None
     assert regels["confirmed"].actor == f"user:{gebruiker.id}"
     assert "user_id" not in kolommen("audit_log")
+
+
+def test_de_export_van_een_wedstrijd_laat_de_andere_buiten(db, client, wedstrijd, gebruiker):
+    """Waar de kolom voor bedoeld was: de log van déze wedstrijd, niet van al je wedstrijden."""
+    competition, _ = wedstrijd
+    create_competition(db, "Tweede wedstrijd", gebruiker)
+    login_admin(client)
+
+    een = client.get(f"/admin/c/{competition.id}/audit.csv")
+    alles = client.get("/admin/audit.csv")
+
+    assert een.status_code == 200
+    assert een.headers["content-disposition"].endswith(f'auditlog-{competition.id}.csv"')
+    assert "Testwedstrijd" in een.text
+    assert "Tweede wedstrijd" not in een.text
+    assert "Testwedstrijd" in alles.text and "Tweede wedstrijd" in alles.text
+
+
+def test_andermans_wedstrijd_heeft_geen_auditlog(db, client, wedstrijd):
+    """Net als bij de uitslag: die wedstrijd bestaat niet voor hem, in plaats van verboden."""
+    competition, _ = wedstrijd
+    db.add(User(email="ander@club.nl", password_hash=WACHTWOORD_HASH, confirmed_at=now()))
+    db.commit()
+
+    login_admin(client, "ander@club.nl")
+
+    assert client.get(f"/admin/c/{competition.id}/audit.csv").status_code == 404
