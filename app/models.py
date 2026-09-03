@@ -24,7 +24,6 @@ from sqlalchemy import (
     inspect,
     select,
     text,
-    update,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
@@ -224,16 +223,27 @@ class HoleScore(Base):
 
 
 class AuditLog(Base):
-    """Logregel voor elke mutatie die niet triviaal terug te draaien is."""
+    """Logregel voor elke mutatie die niet triviaal terug te draaien is.
+
+    Hangt aan de wedstrijd en niet aan de wedstrijdleider: die kan wisselen, de wedstrijd
+    niet. Daarop filtert de export, zodat niemand de correcties van een ander te zien
+    krijgt, en zo verhuist de geschiedenis mee bij een overdracht. Leeg = een regel over de
+    installatie zelf, zoals een aanmelding; die staat in geen enkele export. Verdwijnt de
+    wedstrijd, dan zegt zijn geschiedenis niets meer en gaat die mee.
+
+    `actor` is altijd `soort:id` -- `user:{app_user.id}` of `entry:{entry.id}` -- en nooit
+    een kaal woord. Beide tabellen tellen vanaf 1, dus zonder dat voorvoegsel is `39` uit de
+    ene niet te onderscheiden van `39` uit de andere en wijst een regel de verkeerde persoon
+    aan. Wie iets deed staat er los van waar het over ging: bij twee wedstrijdleiders op één
+    wedstrijd is dat niet meer uit de eigenaar af te leiden.
+    """
 
     __tablename__ = "audit_log"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
-    # De wedstrijdleider wiens wedstrijd het betreft. Daarop filtert de export, zodat niemand
-    # de correcties van een ander te zien krijgt. Leeg = een regel over de installatie zelf.
-    user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("app_user.id", ondelete="SET NULL"), nullable=True, index=True
+    competition_id: Mapped[int | None] = mapped_column(
+        ForeignKey("competition.id", ondelete="CASCADE"), nullable=True, index=True
     )
     actor: Mapped[str] = mapped_column(String(50))
     action: Mapped[str] = mapped_column(String(50))
@@ -261,10 +271,11 @@ NIEUWE_KOLOMMEN = {
         )
     },
     "audit_log": {
-        "user_id": (
-            "alter table audit_log add column if not exists user_id integer "
-            "references app_user(id) on delete set null",
-            "create index if not exists ix_audit_log_user_id on audit_log (user_id)",
+        "competition_id": (
+            "alter table audit_log add column if not exists competition_id integer "
+            "references competition(id) on delete cascade",
+            "create index if not exists ix_audit_log_competition_id on audit_log "
+            "(competition_id)",
         )
     },
 }
@@ -275,6 +286,7 @@ def create_all() -> None:
     Base.metadata.create_all(engine)
     _voeg_kolommen_toe()
     _geef_wedstrijden_een_eigenaar()
+    _verhuis_auditlog_naar_de_wedstrijd()
 
 
 def _voeg_kolommen_toe() -> None:
@@ -346,11 +358,62 @@ def _zet_eigenaar(db) -> None:
         db.flush()
     for competition in zonder:
         competition.user_id = eigenaar.id
-    # De audit log van voor de accounts is ook van hem: op dat moment was er maar één
-    # beheerder. Zonder deze regel raakt hij bij het bijwerken zijn hele geschiedenis kwijt,
-    # want de export filtert op eigenaar.
-    db.execute(update(AuditLog).where(AuditLog.user_id.is_(None)).values(user_id=eigenaar.id))
     db.commit()
+
+
+# De verhuizing van de audit log van de wedstrijdleider naar de wedstrijd, op volgorde. De
+# wedstrijd staat per actie onder een andere sleutel in `detail`, dus dat zijn vier pogingen
+# in plaats van één. Wat daarna nog geen wedstrijd heeft ging over een wedstrijd die niet
+# meer bestaat, en verdwijnt. Pas daarna de actoren: dat scheelt werk op regels die weggaan.
+VERHUIZING = (
+    """update audit_log a set competition_id = c.id from competition c
+       where a.competition_id is null and c.id = (a.detail::jsonb->>'competition')::int""",
+    """update audit_log a set competition_id = r.competition_id
+       from entry e join round r on r.id = e.round_id
+       where a.competition_id is null and e.id = (a.detail::jsonb->>'entry')::int""",
+    """update audit_log a set competition_id = r.competition_id from round r
+       where a.competition_id is null and r.id = (a.detail::jsonb->>'round')::int""",
+    # `competition_created` legde alleen de naam vast. Bij twee wedstrijden met dezelfde
+    # naam is niet te zeggen welke het was, en dan is niets invullen het eerlijke antwoord.
+    """update audit_log a set competition_id = c.id from competition c
+       where a.competition_id is null and a.action = 'competition_created'
+         and c.name = a.detail::jsonb->>'name'
+         and (select count(*) from competition c2 where c2.name = c.name) = 1""",
+    """delete from audit_log
+       where competition_id is null and action not in ('registered', 'confirmed')""",
+    # `player:` telde altijd al een deelname, niet een speler. Alleen de naam was mis.
+    """update audit_log set actor = 'entry:' || split_part(actor, ':', 2)
+       where actor like 'player:%'""",
+    """update audit_log set actor = 'user:' || user_id
+       where actor not like '%:%' and user_id is not null""",
+    """update audit_log a set actor = 'user:' || u.id from app_user u
+       where a.actor not like '%:%' and u.email = a.detail::jsonb->>'email'""",
+    # Een database van voor de accounts heeft nergens een `user_id`. Daar was één beheerder,
+    # dus is de eigenaar van de wedstrijd degene die het deed.
+    """update audit_log a set actor = 'user:' || c.user_id from competition c
+       where a.actor not like '%:%' and c.id = a.competition_id""",
+    "drop index if exists ix_audit_log_user_id",
+    "alter table audit_log drop column user_id",
+)
+
+
+def _verhuis_auditlog_naar_de_wedstrijd() -> None:
+    """Zet de audit log over van de wedstrijdleider naar de wedstrijd.
+
+    Vroeger hing elke regel aan een `user_id`: een kopie van de eigenaar op het moment van
+    schrijven. Die kopie liep achter zodra een wedstrijd van eigenaar wisselde, en hij gaf
+    geen antwoord op de vraag die je stelt -- wat is er in deze wedstrijd gebeurd. Dat werd
+    afgeleid uit `detail`, maar daar staat een deelname in, en die verdwijnt bij het wissen
+    van de spelers. Nu staat de wedstrijd zelf op de regel en is er niets meer af te leiden.
+
+    Alles in één transactie: half verhuisd is erger dan niet verhuisd. Blijft er een kale
+    actor over, dan is dat een account dat niet meer bestaat; die regel liegt liever niet.
+    """
+    if "user_id" not in {k["name"] for k in inspect(engine).get_columns("audit_log")}:
+        return
+    with engine.begin() as conn:
+        for opdracht in VERHUIZING:
+            conn.execute(text(opdracht))
 
 
 def get_db():

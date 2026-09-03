@@ -44,7 +44,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import new_token
 from app.models import DEFAULT_PARS, Competition, Entry, Flight, Player, Round, User
-from app.scoring import log
+from app.scoring import log, user_actor
 
 COLUMNS = ("naam", "email", "ronde", "flight", "starthole", "marker")
 
@@ -380,10 +380,9 @@ def import_csv(db: Session, competition: Competition, text: str) -> ImportResult
 
     log(
         db,
-        "admin",
+        user_actor(competition.user_id),
         "import",
-        competition.user_id,
-        competition=competition.id,
+        competition.id,
         created=result.created_entries,
         updated=result.updated_entries,
     )
@@ -400,6 +399,9 @@ def create_competition(db: Session, name: str, user: User) -> Competition:
         status="live",
     )
     db.add(competition)
-    log(db, "admin", "competition_created", user.id, name=name)
+    # Eerst flushen: zonder id valt deze regel aan geen wedstrijd te hangen, en juist die
+    # regel hoort te vertellen wélke wedstrijd er is aangemaakt.
+    db.flush()
+    log(db, user_actor(user.id), "competition_created", competition.id, name=name)
     db.commit()
     return competition

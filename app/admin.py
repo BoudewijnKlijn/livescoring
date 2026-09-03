@@ -23,7 +23,7 @@ from app.auth import AppError, CurrentAdmin, DbSession, new_token
 from app.config import settings
 from app.importer import create_competition, import_csv
 from app.models import HOLES, Competition, Entry, Flight, HoleScore, Round, User, now
-from app.scoring import build_card, log
+from app.scoring import build_card, log, user_actor
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory="app/templates")
@@ -80,10 +80,7 @@ def verbergen(
     """Zet een wedstrijd op verborgen of weer terug. Er wordt niets verwijderd."""
     competition = get_competition(db, competition_id, gebruiker)
     competition.status = "live" if terug else "closed"
-    log(
-        db, "admin", "verbergen", gebruiker.id,
-        competition=competition.id, status=competition.status,
-    )
+    log(db, user_actor(gebruiker.id), "verbergen", competition.id, status=competition.status)
     db.commit()
     return RedirectResponse("/admin", status_code=303)
 
@@ -211,7 +208,7 @@ def set_pars(
     values = [int(p) for p in pars.replace(",", " ").split() if p.strip().isdigit()]
     if len(values) == HOLES:
         rnd.pars = values
-        log(db, "admin", "pars", gebruiker.id, round=round_id, pars=values)
+        log(db, user_actor(gebruiker.id), "pars", rnd.competition_id, round=round_id, pars=values)
         db.commit()
     return RedirectResponse(f"/admin/c/{rnd.competition_id}", status_code=303)
 
@@ -266,7 +263,7 @@ def override_score(
         row.strokes = value
         row.updated_at = now()
     log(
-        db, "admin", "override", gebruiker.id,
+        db, user_actor(gebruiker.id), "override", entry.round.competition_id,
         entry=entry.id, hole=hole, strokes=value, reason=reden.strip(),
     )
     db.commit()
@@ -286,7 +283,10 @@ def set_status(
     if status not in ("ok", "dq", "nr", "wd"):
         raise AppError("Onbekende status.", 404)
     entry.status = status
-    log(db, "admin", "status", gebruiker.id, entry=entry.id, status=status, reason=reden.strip())
+    log(
+        db, user_actor(gebruiker.id), "status", entry.round.competition_id,
+        entry=entry.id, status=status, reason=reden.strip(),
+    )
     db.commit()
     return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
 
@@ -299,19 +299,22 @@ def unlock(
     entry = get_entry(db, entry_id, gebruiker)
     entry.locked = False
     entry.signed_at = None
-    log(db, "admin", "unlock", gebruiker.id, entry=entry.id, reason=reden.strip())
+    log(
+        db, user_actor(gebruiker.id), "unlock", entry.round.competition_id,
+        entry=entry.id, reason=reden.strip(),
+    )
     db.commit()
     return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
 
 
-def _rotate(db: DbSession, entries: list[Entry], eigenaar_id: int) -> list[tuple[str, int, str]]:
+def _rotate(db: DbSession, entries: list[Entry], gebruiker_id: int) -> list[tuple[str, int, str]]:
     """Geef elke entry een nieuw token. Scores blijven staan."""
     links = []
     for entry in entries:
         token, token_hash = new_token()
         entry.token_hash = token_hash
         links.append((entry.player.name, entry.round.no, token))
-        log(db, "admin", "rotate", eigenaar_id, entry=entry.id)
+        log(db, user_actor(gebruiker_id), "rotate", entry.round.competition_id, entry=entry.id)
     db.commit()
     return links
 
@@ -388,7 +391,10 @@ def reset_card(
         db.delete(row)
     entry.signed_at = None
     entry.locked = False
-    log(db, "admin", "reset_card", gebruiker.id, entry=entry.id, reason=reden.strip())
+    log(
+        db, user_actor(gebruiker.id), "reset_card", entry.round.competition_id,
+        entry=entry.id, reason=reden.strip(),
+    )
     db.commit()
     return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
 
@@ -417,6 +423,6 @@ def wis_spelers(
         db.delete(rnd)
     for player in list(competition.players):
         db.delete(player)
-    log(db, "admin", "wis_spelers", gebruiker.id, competition=competition.id, deelnames=aantal)
+    log(db, user_actor(gebruiker.id), "wis_spelers", competition.id, deelnames=aantal)
     db.commit()
     return RedirectResponse(f"/admin/c/{competition_id}", status_code=303)

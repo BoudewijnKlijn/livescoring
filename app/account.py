@@ -31,7 +31,7 @@ from app.auth import AppError, DbSession, hash_token, login_user, logout, new_to
 from app.config import settings
 from app.mail import account_bericht, verstuur
 from app.models import User, now
-from app.scoring import log
+from app.scoring import log, user_actor
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +196,8 @@ def do_register(
         db.add(gebruiker)
     gebruiker.password_hash = hash_password(wachtwoord)
     gebruiker.confirm_token_hash = token_hash
-    log(db, "account", "registered", email=adres)
+    db.flush()
+    log(db, user_actor(gebruiker.id), "registered", email=adres)
     db.commit()
 
     _stuur_bevestiging(achtergrond, adres, token)
@@ -229,7 +230,7 @@ def confirm(token: str, db: DbSession) -> Response:
         )
     gebruiker.confirmed_at = now()
     gebruiker.confirm_token_hash = None
-    log(db, "account", "confirmed", email=gebruiker.email)
+    log(db, user_actor(gebruiker.id), "confirmed", email=gebruiker.email)
     db.commit()
 
     response = RedirectResponse("/admin", status_code=303)

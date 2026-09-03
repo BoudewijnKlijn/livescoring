@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from app.admin import get_competition
 from app.auth import CurrentAdmin, DbSession
-from app.models import HOLES, AuditLog
+from app.models import HOLES, AuditLog, Competition
 from app.scoring import build_card
 
 router = APIRouter(prefix="/admin", tags=["export"])
@@ -75,15 +75,18 @@ def export_csv(
 def export_audit(db: DbSession, gebruiker: CurrentAdmin) -> StreamingResponse:
     """De audit log van alle eigen wedstrijden: elke correctie en ingreep, met reden.
 
-    Wel per wedstrijdleider, bewust niet per wedstrijd. Een regel verwijst naar een deelname
-    of een ronde, en juist na het verwijderen van alle spelers zijn die er niet meer om op te
-    filteren. Dan zou de export leeg zijn op het moment dat je hem het hardst nodig hebt. De
-    eigenaar staat wel op elke regel zelf, dus die blijft ook daarna te filteren.
+    Elke regel noemt zijn wedstrijd, dus dit filtert op de wedstrijden van deze
+    wedstrijdleider. Het wissen van alle spelers raakt dat niet: de wedstrijd zelf blijft
+    staan, en daarmee de regels erover. Wat over de installatie gaat hangt aan geen enkele
+    wedstrijd en valt er via de join dus buiten.
     """
     rijen = [
         [row.at.isoformat(timespec="seconds"), row.actor, row.action, row.detail]
         for row in db.scalars(
-            select(AuditLog).where(AuditLog.user_id == gebruiker.id).order_by(AuditLog.at)
+            select(AuditLog)
+            .join(Competition, AuditLog.competition_id == Competition.id)
+            .where(Competition.user_id == gebruiker.id)
+            .order_by(AuditLog.at)
         )
     ]
     return _csv_response(["tijdstip", "wie", "actie", "details"], rijen, "auditlog.csv")

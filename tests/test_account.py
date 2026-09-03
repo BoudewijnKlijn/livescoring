@@ -404,14 +404,21 @@ def test_auditlog_toont_alleen_de_eigen_wedstrijd(db, client, ingelogd, wedstrij
     assert "geheime reden" not in auditlog.text
 
 
-def test_spelersacties_komen_bij_de_eigenaar_terecht(db, client, wedstrijd, gebruiker):
-    """Wat een speler doet hoort in de audit log van de wedstrijdleider van die wedstrijd."""
+def test_spelersacties_komen_bij_de_eigenaar_terecht(db, client, wedstrijd):
+    """Wat een speler doet hoort in de audit log van de wedstrijdleider van die wedstrijd.
+
+    Niet omdat de regel hem noemt -- hij deed het niet -- maar omdat hij de wedstrijd heeft.
+    """
+    competition, _ = wedstrijd
     vul_kaart(db, entry_van(db, "Jan"), holes=1)
 
     db.expire_all()
     regels = db.scalars(select(AuditLog).where(AuditLog.action == "score")).all()
     assert regels != []
-    assert all(r.user_id == gebruiker.id for r in regels)
+    assert all(r.competition_id == competition.id for r in regels)
+
+    login_admin(client)
+    assert "score" in client.get("/admin/audit.csv").text
 
 
 def test_oude_wedstrijd_krijgt_de_eigenaar_uit_de_instelling(db, monkeypatch):
@@ -429,12 +436,6 @@ def test_oude_wedstrijd_krijgt_de_eigenaar_uit_de_instelling(db, monkeypatch):
             "values ('Oude wedstrijd', 'live', 'oud', now())"
         )
     )
-    db.execute(
-        text(
-            "insert into audit_log (at, actor, action, detail) "
-            "values (now(), 'admin', 'override', '{}')"
-        )
-    )
     db.commit()
 
     create_all()
@@ -446,10 +447,6 @@ def test_oude_wedstrijd_krijgt_de_eigenaar_uit_de_instelling(db, monkeypatch):
     assert competition.user_id == eigenaar.id
     assert eigenaar.confirmed_at is None, "de eigenaar moet het account nog opeisen"
     assert eigenaar.password_hash == GEEN_WACHTWOORD
-
-    regels = db.scalars(select(AuditLog)).all()
-    assert regels != []
-    assert all(r.user_id == eigenaar.id for r in regels), "de geschiedenis blijft van hem"
 
 
 def test_de_eigenaar_van_de_migratie_eist_zijn_account_op(db, client, registreren, monkeypatch):

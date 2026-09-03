@@ -232,7 +232,7 @@ def set_score(
     row.strokes = strokes
     row.entered_by_entry_id = actor.id
     row.updated_at = now()
-    log(db, f"player:{actor.id}", "score", target.round.competition.user_id,
+    log(db, entry_actor(actor.id), "score", target.round.competition_id,
         entry=target.id, hole=hole, source=source, strokes=strokes)
     db.commit()
     db.refresh(target)
@@ -250,19 +250,36 @@ def sign_card(db: Session, entry: Entry) -> None:
         raise ScoreError("Nog niet alle holes zijn door beide spelers ingevuld.")
     entry.signed_at = now()
     entry.locked = True
-    log(db, f"player:{entry.id}", "sign", entry.round.competition.user_id,
+    log(db, entry_actor(entry.id), "sign", entry.round.competition_id,
         entry=entry.id, total=card.total)
     db.commit()
 
 
-def log(db: Session, actor: str, action: str, owner_id: int | None = None, **detail) -> None:
+def user_actor(user_id: int) -> str:
+    """De actor-tekst van een wedstrijdleider."""
+    return f"user:{user_id}"
+
+
+def entry_actor(entry_id: int) -> str:
+    """De actor-tekst van een speler. Het id is van zijn deelname, niet van de speler zelf."""
+    return f"entry:{entry_id}"
+
+
+def log(
+    db: Session, actor: str, action: str, competition_id: int | None = None, **detail
+) -> None:
     """Schrijf een regel in de audit log. Commit gebeurt door de aanroeper.
 
-    `owner_id` is de wedstrijdleider wiens wedstrijd het betreft. Daarop filtert de export,
-    zodat niemand de correcties van een ander te zien krijgt. Een regel zonder eigenaar gaat
-    over de installatie zelf en komt in geen enkele export terecht.
+    `competition_id` is de wedstrijd waar de regel over gaat. Daarop filtert de export, en
+    daarmee verhuist de geschiedenis mee als een wedstrijd een andere eigenaar krijgt. Een
+    regel zonder wedstrijd gaat over de installatie zelf en komt in geen export terecht.
+
+    Bouw `actor` met `user_actor` of `entry_actor` en nooit met de hand: een kaal woord
+    zegt niet wie het was, en een los getal niet uit welke tabel het komt.
     """
-    db.add(AuditLog(actor=actor, action=action, user_id=owner_id, detail=detail))
+    db.add(
+        AuditLog(actor=actor, action=action, competition_id=competition_id, detail=detail)
+    )
 
 
 def par_klasse(strokes: int | None, par: int) -> str:
