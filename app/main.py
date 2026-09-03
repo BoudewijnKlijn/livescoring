@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.account import router as account_router
 from app.admin import router as admin_router
 from app.auth import (
     AppError,
@@ -49,6 +50,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Live scoring", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.include_router(account_router)
 app.include_router(admin_router)
 app.include_router(export_router)
 

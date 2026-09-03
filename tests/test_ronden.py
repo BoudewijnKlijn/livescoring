@@ -255,9 +255,9 @@ def test_een_gekozen_ronde_wint_van_de_klok(db, toernooi):
     assert huidige_ronde(db, competition, 7) == 2, "onzin valt terug op de lopende ronde"
 
 
-def test_competitie_zonder_ronden_valt_terug_op_een(db):
+def test_competitie_zonder_ronden_valt_terug_op_een(db, gebruiker):
     """Een verse competitie zonder import mag het bord niet laten klappen."""
-    competition = create_competition(db, "Nog niets")
+    competition = create_competition(db, "Nog niets", gebruiker)
 
     assert huidige_ronde(db, competition, None) == 1
     assert leaderboard(db, competition, 1) == []

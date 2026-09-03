@@ -232,8 +232,8 @@ def set_score(
     row.strokes = strokes
     row.entered_by_entry_id = actor.id
     row.updated_at = now()
-    log(db, f"player:{actor.id}", "score", entry=target.id, hole=hole, source=source,
-        strokes=strokes)
+    log(db, f"player:{actor.id}", "score", target.round.competition.user_id,
+        entry=target.id, hole=hole, source=source, strokes=strokes)
     db.commit()
     db.refresh(target)
     return row
@@ -250,13 +250,19 @@ def sign_card(db: Session, entry: Entry) -> None:
         raise ScoreError("Nog niet alle holes zijn door beide spelers ingevuld.")
     entry.signed_at = now()
     entry.locked = True
-    log(db, f"player:{entry.id}", "sign", entry=entry.id, total=card.total)
+    log(db, f"player:{entry.id}", "sign", entry.round.competition.user_id,
+        entry=entry.id, total=card.total)
     db.commit()
 
 
-def log(db: Session, actor: str, action: str, **detail) -> None:
-    """Schrijf een regel in de audit log. Commit gebeurt door de aanroeper."""
-    db.add(AuditLog(actor=actor, action=action, detail=detail))
+def log(db: Session, actor: str, action: str, owner_id: int | None = None, **detail) -> None:
+    """Schrijf een regel in de audit log. Commit gebeurt door de aanroeper.
+
+    `owner_id` is de wedstrijdleider wiens wedstrijd het betreft. Daarop filtert de export,
+    zodat niemand de correcties van een ander te zien krijgt. Een regel zonder eigenaar gaat
+    over de installatie zelf en komt in geen enkele export terecht.
+    """
+    db.add(AuditLog(actor=actor, action=action, user_id=owner_id, detail=detail))
 
 
 def par_klasse(strokes: int | None, par: int) -> str:

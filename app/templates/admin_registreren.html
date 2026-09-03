@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Account aanmaken{% endblock %}
+{% block kop %}Account aanmaken{% endblock %}
+{% block inhoud %}
+{% if verstuurd %}
+<div class="kaart smal">
+  <p class="melding goed">Er is een mail onderweg naar {{ verstuurd }}.</p>
+  <p class="klein">Klik op de link in die mail om je adres te bevestigen. Daarna kun je
+  inloggen en je eerste wedstrijd aanmaken. Niets ontvangen? Kijk in je spambox, of
+  <a href="/admin/registreren">meld je opnieuw aan</a> voor een nieuwe link.</p>
+</div>
+{% else %}
+<form method="post" action="/admin/registreren" class="kaart smal">
+  {% if error %}<p class="melding fout">{{ error }}</p>{% endif %}
+  <label for="email">E-mailadres</label>
+  <input id="email" type="email" name="email" value="{{ email }}" autocomplete="username"
+         maxlength="{{ max_email }}" required autofocus>
+  <label for="ww">Wachtwoord</label>
+  <input id="ww" type="password" name="wachtwoord" autocomplete="new-password"
+         maxlength="{{ max_wachtwoord }}" required>
+  <button class="knop groot" type="submit">Account aanmaken</button>
+  <p class="klein">Je krijgt een mail om je adres te bevestigen; daarna kun je wedstrijden
+  aanmaken. Je beheert alleen je eigen wedstrijden.</p>
+</form>
+{% endif %}
+<p class="klein"><a href="/admin/login">Heb je al een account? Inloggen.</a></p>
+{% endblock %}

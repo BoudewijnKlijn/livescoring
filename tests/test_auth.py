@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.auth import new_token
 from app.models import Competition, Entry
-from tests.helpers import bevestigingscode, entry_van
+from tests.helpers import bevestigingscode, entry_van, login_admin
 
 
 def test_score_invoeren_voor_speler_zonder_marker_rol_faalt(db, wedstrijd, als_speler):
@@ -95,7 +95,7 @@ def test_admin_wist_alle_spelers(db, wedstrijd, client):
     weg kunnen.
     """
     competition, _ = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
     assert "Jan" in client.get(f"/admin/c/{competition.id}").text
 
     code = bevestigingscode(client, f"/admin/c/{competition.id}?p=wissen")
@@ -117,7 +117,7 @@ def test_admin_wist_alle_spelers(db, wedstrijd, client):
 def test_wissen_zonder_juiste_code_verandert_niets(db, wedstrijd, client):
     """Een verkeerde bevestigingscode laat alles staan."""
     competition, _ = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
 
     antwoord = client.post(
         f"/admin/c/{competition.id}/wissen", data={"verwacht": "ABCD", "code": "ZZZZ"}
@@ -135,7 +135,7 @@ def test_mislukte_import_toont_de_spelers_gewoon(db, wedstrijd, client):
     op een wedstrijddag precies het moment waarop iemand in paniek opnieuw gaat importeren.
     """
     competition, _ = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
     voor = len(db.scalars(select(Entry)).all())
 
     antwoord = client.post(f"/admin/c/{competition.id}/import", data={"csv_tekst": ""})
@@ -151,7 +151,7 @@ def test_mislukte_import_toont_de_spelers_gewoon(db, wedstrijd, client):
 def test_import_met_fout_in_een_regel_wijzigt_niets(db, wedstrijd, client):
     """Bij een fout in het bestand blijft alles zoals het was."""
     competition, _ = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
     voor = len(db.scalars(select(Entry)).all())
 
     antwoord = client.post(
@@ -168,7 +168,7 @@ def test_import_met_fout_in_een_regel_wijzigt_niets(db, wedstrijd, client):
 def test_links_zijn_tabgescheiden_voor_excel(db, wedstrijd, client):
     """De linkenlijst plakt in kolommen: tabs tussen naam, ronde en link."""
     competition, _ = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
 
     antwoord = client.post(
         f"/admin/c/{competition.id}/import",
@@ -184,7 +184,7 @@ def test_links_zijn_tabgescheiden_voor_excel(db, wedstrijd, client):
 def test_wedstrijd_verbergen_en_terugzetten(db, wedstrijd, client):
     """Verbergen haalt een wedstrijd uit de lijst zonder iets te verwijderen."""
     competition, _ = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
 
     client.post(f"/admin/c/{competition.id}/verbergen", follow_redirects=False)
 
@@ -204,7 +204,7 @@ def test_wedstrijd_verbergen_en_terugzetten(db, wedstrijd, client):
 def test_verborgen_wedstrijd_houdt_werkend_leaderboard(db, wedstrijd, client):
     """De leaderboardlink blijft werken; verbergen is alleen opruimen in het admingedeelte."""
     competition, _ = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
     client.post(f"/admin/c/{competition.id}/verbergen")
 
     assert client.get(f"/l/{competition.leaderboard_slug}").status_code == 200
@@ -213,7 +213,7 @@ def test_verborgen_wedstrijd_houdt_werkend_leaderboard(db, wedstrijd, client):
 def test_nieuwe_link_voor_een_speler_laat_de_rest_werken(db, wedstrijd, client):
     """Eén speler krijgt een nieuwe link; de anderen houden hun oude link en hun scores."""
     competition, tokens = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
     jan = entry_van(db, "Jan")
     code = bevestigingscode(client, f"/admin/c/{competition.id}?p=link")
 
@@ -236,7 +236,7 @@ def test_nieuwe_link_voor_een_speler_laat_de_rest_werken(db, wedstrijd, client):
 def test_nieuwe_link_vraagt_altijd_om_de_code(db, wedstrijd, client):
     """Zonder de juiste code verandert er niets aan de link."""
     competition, tokens = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
     jan = entry_van(db, "Jan")
 
     antwoord = client.post(
@@ -256,7 +256,7 @@ def test_lege_spelerkeuze_vervangt_niet_stilzwijgend_alle_links(db, wedstrijd, c
     speler geholpen moest worden.
     """
     competition, tokens = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
     code = bevestigingscode(client, f"/admin/c/{competition.id}?p=link")
 
     antwoord = client.post(
@@ -274,7 +274,7 @@ def test_lege_spelerkeuze_vervangt_niet_stilzwijgend_alle_links(db, wedstrijd, c
 def test_uitslag_is_van_deze_wedstrijd_en_de_auditlog_van_alle(db, wedstrijd, client):
     """De uitslag hoort bij één wedstrijd. De audit log staat los en heeft geen id nodig."""
     competition, _ = wedstrijd
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
 
     uitslag = client.get(f"/admin/c/{competition.id}/export.csv")
     auditlog = client.get("/admin/audit.csv")

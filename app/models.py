@@ -1,6 +1,6 @@
 """SQLAlchemy-modellen en database-setup.
 
-Zeven tabellen: competition, player, round, flight, entry, hole_score, audit_log.
+Acht tabellen: app_user, competition, player, round, flight, entry, hole_score, audit_log.
 Een `entry` is een speler in een ronde: daaraan hangt het token, de kaart en de status.
 Statussen zijn tekstkolommen met een check constraint in plaats van native enums, zodat het
 schema zonder migratietooling te wijzigen is.
@@ -21,6 +21,10 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     create_engine,
+    inspect,
+    select,
+    text,
+    update,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
@@ -31,6 +35,9 @@ HOLES = 18
 DEFAULT_PARS = [5, 4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 3, 4, 4, 4, 4, 3, 5]
 SOURCES = ("self", "marker")
 ENTRY_STATUSES = ("ok", "dq", "nr", "wd")
+# Geen geldige scrypt-hash, dus er valt niet mee in te loggen. Een account dat hierop staat
+# is aangemaakt door de migratie en wacht tot de eigenaar het opeist via /admin/registreren.
+GEEN_WACHTWOORD = "geen-wachtwoord"
 
 
 def now() -> dt.datetime:
@@ -44,17 +51,43 @@ class Base(DeclarativeBase):
     type_annotation_map = {dict[str, Any]: JSON, list[int]: JSON}
 
 
+class User(Base):
+    """Een wedstrijdleider met een eigen account. Ziet alleen zijn eigen wedstrijden.
+
+    De tabel heet `app_user`, want `user` is een gereserveerd woord in Postgres. Van het
+    wachtwoord staat alleen een scrypt-hash in de database, van de bevestigingslink alleen
+    een sha256-hash. Zolang `confirmed_at` leeg is kan er niet ingelogd worden.
+    """
+
+    __tablename__ = "app_user"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(200))
+    confirm_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    confirmed_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+    competitions: Mapped[list[Competition]] = relationship(back_populates="owner")
+
+
 class Competition(Base):
     """Een clubkampioenschap, bestaand uit een of meer ronden."""
 
     __tablename__ = "competition"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("app_user.id", ondelete="CASCADE"), index=True
+    )
     name: Mapped[str] = mapped_column(String(200))
     status: Mapped[str] = mapped_column(String(20), default="setup")
     leaderboard_slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
 
+    owner: Mapped[User] = relationship(back_populates="competitions")
     rounds: Mapped[list[Round]] = relationship(
         back_populates="competition", cascade="all, delete-orphan", order_by="Round.no"
     )
@@ -197,6 +230,11 @@ class AuditLog(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    # De wedstrijdleider wiens wedstrijd het betreft. Daarop filtert de export, zodat niemand
+    # de correcties van een ander te zien krijgt. Leeg = een regel over de installatie zelf.
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     actor: Mapped[str] = mapped_column(String(50))
     action: Mapped[str] = mapped_column(String(50))
     detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -212,9 +250,107 @@ engine = create_engine(
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
 
+# Kolommen die na de eerste versie zijn bijgekomen. `create_all` maakt alleen ontbrekende
+# tabellen aan, geen ontbrekende kolommen, en een draaiende database heeft de tabel al.
+NIEUWE_KOLOMMEN = {
+    "competition": {
+        "user_id": (
+            "alter table competition add column if not exists user_id integer "
+            "references app_user(id) on delete cascade",
+            "create index if not exists ix_competition_user_id on competition (user_id)",
+        )
+    },
+    "audit_log": {
+        "user_id": (
+            "alter table audit_log add column if not exists user_id integer "
+            "references app_user(id) on delete set null",
+            "create index if not exists ix_audit_log_user_id on audit_log (user_id)",
+        )
+    },
+}
+
+
 def create_all() -> None:
-    """Maak ontbrekende tabellen aan. Vervangt Alembic voor dit project."""
+    """Maak ontbrekende tabellen en kolommen aan. Vervangt Alembic voor dit project."""
     Base.metadata.create_all(engine)
+    _voeg_kolommen_toe()
+    _geef_wedstrijden_een_eigenaar()
+
+
+def _voeg_kolommen_toe() -> None:
+    """Voeg kolommen toe die een oudere database nog niet heeft.
+
+    Eerst kijken, dan pas wijzigen. Een `alter table` neemt de zwaarste lock die er is, en
+    die blind bij elke start uitvoeren zet de app achter elke lezer in de rij. Op een
+    database die al bij is gebeurt er nu niets.
+    """
+    inspecteur = inspect(engine)
+    for tabel, kolommen in NIEUWE_KOLOMMEN.items():
+        bestaand = {kolom["name"] for kolom in inspecteur.get_columns(tabel)}
+        opdrachten = [
+            opdracht
+            for naam, groep in kolommen.items()
+            if naam not in bestaand
+            for opdracht in groep
+        ]
+        if not opdrachten:
+            continue
+        with engine.begin() as conn:
+            for opdracht in opdrachten:
+                conn.execute(text(opdracht))
+
+
+def _geef_wedstrijden_een_eigenaar() -> None:
+    """Zet de wedstrijden van voor de accounts op naam van `OWNER_EMAIL`.
+
+    Elke wedstrijd hoort bij een wedstrijdleider, maar de wedstrijden die er al waren
+    hebben nog niemand: die stonden achter het beheerderswachtwoord dat er niet meer is.
+    Die krijgen hier hun eigenaar, waarna de kolom verplicht wordt.
+
+    Bestaat dat account nog niet, dan wordt het aangemaakt zonder bruikbaar wachtwoord en
+    zonder bevestiging. De eigenaar meldt zich daarna gewoon aan op `/admin/registreren`
+    met datzelfde adres: dat is de weg voor een adres dat nog niet bevestigd is, en hij
+    kiest zijn wachtwoord dus zelf. Zo staat er nergens een wachtwoord in een instelling.
+
+    De kolom die nog leeg mag zijn is het enige wat hier gecontroleerd wordt. Is die
+    verplicht, dan is deze database bij en gebeurt er niets meer.
+    """
+    if not _mag_leeg_zijn("competition", "user_id"):
+        return
+    with SessionLocal() as db:
+        _zet_eigenaar(db)
+    with engine.begin() as conn:
+        conn.execute(text("alter table competition alter column user_id set not null"))
+
+
+def _mag_leeg_zijn(tabel: str, kolom: str) -> bool:
+    """Of een kolom nog null toestaat."""
+    return any(k["nullable"] for k in inspect(engine).get_columns(tabel) if k["name"] == kolom)
+
+
+def _zet_eigenaar(db) -> None:
+    """Geef elke wedstrijd zonder eigenaar het account van `OWNER_EMAIL`."""
+    zonder = db.scalars(select(Competition).where(Competition.user_id.is_(None))).all()
+    if not zonder:
+        return
+    adres = settings.owner_email.strip().lower()
+    if not adres:
+        raise RuntimeError(
+            f"{len(zonder)} wedstrijd(en) hebben nog geen eigenaar. Zet OWNER_EMAIL op het "
+            "e-mailadres van de wedstrijdleiding en start opnieuw."
+        )
+    eigenaar = db.scalar(select(User).where(User.email == adres))
+    if eigenaar is None:
+        eigenaar = User(email=adres, password_hash=GEEN_WACHTWOORD)
+        db.add(eigenaar)
+        db.flush()
+    for competition in zonder:
+        competition.user_id = eigenaar.id
+    # De audit log van voor de accounts is ook van hem: op dat moment was er maar één
+    # beheerder. Zonder deze regel raakt hij bij het bijwerken zijn hele geschiedenis kwijt,
+    # want de export filtert op eigenaar.
+    db.execute(update(AuditLog).where(AuditLog.user_id.is_(None)).values(user_id=eigenaar.id))
+    db.commit()
 
 
 def get_db():

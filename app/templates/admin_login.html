@@ -4,8 +4,11 @@
 {% block inhoud %}
 <form method="post" action="/admin/login" class="kaart smal">
   {% if error %}<p class="melding fout">{{ error }}</p>{% endif %}
+  <label for="email">E-mailadres</label>
+  <input id="email" type="email" name="email" autocomplete="username" required autofocus>
   <label for="ww">Wachtwoord</label>
-  <input id="ww" type="password" name="wachtwoord" autocomplete="current-password" autofocus>
+  <input id="ww" type="password" name="wachtwoord" autocomplete="current-password" required>
   <button class="knop groot" type="submit">Inloggen</button>
+  <p class="klein">Nog geen account? <a href="/admin/registreren">Maak er hier een aan.</a></p>
 </form>
 {% endblock %}

@@ -11,10 +11,15 @@ import random
 
 from sqlalchemy import select
 
+from app.account import hash_password
 from app.config import settings
 from app.importer import create_competition, import_csv
-from app.models import DEFAULT_PARS, HOLES, Entry, Round, SessionLocal, create_all
+from app.models import DEFAULT_PARS, HOLES, Entry, Round, SessionLocal, User, create_all, now
 from app.scoring import build_card, set_score, sign_card
+
+DEMO_EMAIL = "demo@livescoring.local"
+DEMO_WACHTWOORD = "demo"
+
 
 DEMO_CSV = """naam,email,ronde,flight,starthole,marker
 Jan de Vries,jan@example.nl,1,A,1,Piet Bakker
@@ -109,6 +114,22 @@ def vul_scores(db, competition) -> None:
             sign_card(db, entry)
 
 
+def demo_account(db) -> User:
+    """Het account waar de demowedstrijd op staat. Bestaat het al, dan wordt het hergebruikt.
+
+    Met een wachtwoord dat in de uitvoer staat: dit is een lokaal demoscript, en zonder een
+    account waarmee je kunt inloggen valt er niets te beheren.
+    """
+    gebruiker = db.scalar(select(User).where(User.email == DEMO_EMAIL))
+    if gebruiker is None:
+        gebruiker = User(
+            email=DEMO_EMAIL, password_hash=hash_password(DEMO_WACHTWOORD), confirmed_at=now()
+        )
+        db.add(gebruiker)
+        db.commit()
+    return gebruiker
+
+
 def main() -> None:
     """Maak de demo-wedstrijd en print de links."""
     parser = argparse.ArgumentParser(description="Seed een demo-wedstrijd.")
@@ -122,8 +143,9 @@ def main() -> None:
 
     create_all()
     with SessionLocal() as db:
+        leiding = demo_account(db)
         naam = "Clubkampioenschap 2026" if args.scores else "Demo clubkampioenschap"
-        competition = create_competition(db, naam)
+        competition = create_competition(db, naam, leiding)
         result = import_csv(db, competition, showcase_csv() if args.scores else DEMO_CSV)
         if not result.ok:
             for error in result.errors:
@@ -142,6 +164,7 @@ def main() -> None:
         if len(result.new_links) > 6:
             print(f"... en nog {len(result.new_links) - 6} spelerslinks")
         print(f"\nAdmin: {settings.base_url}/admin")
+        print(f"Inloggen met {DEMO_EMAIL} / {DEMO_WACHTWOORD}")
 
 
 if __name__ == "__main__":

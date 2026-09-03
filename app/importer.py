@@ -43,7 +43,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import new_token
-from app.models import DEFAULT_PARS, Competition, Entry, Flight, Player, Round
+from app.models import DEFAULT_PARS, Competition, Entry, Flight, Player, Round, User
 from app.scoring import log
 
 COLUMNS = ("naam", "email", "ronde", "flight", "starthole", "marker")
@@ -382,6 +382,7 @@ def import_csv(db: Session, competition: Competition, text: str) -> ImportResult
         db,
         "admin",
         "import",
+        competition.user_id,
         competition=competition.id,
         created=result.created_entries,
         updated=result.updated_entries,
@@ -390,10 +391,15 @@ def import_csv(db: Session, competition: Competition, text: str) -> ImportResult
     return result
 
 
-def create_competition(db: Session, name: str) -> Competition:
-    """Maak een competitie met een onraadbare leaderboard-slug."""
-    competition = Competition(name=name, leaderboard_slug=secrets.token_urlsafe(9), status="live")
+def create_competition(db: Session, name: str, user: User) -> Competition:
+    """Maak een competitie met een onraadbare leaderboard-slug, op naam van `user`."""
+    competition = Competition(
+        name=name,
+        user_id=user.id,
+        leaderboard_slug=secrets.token_urlsafe(9),
+        status="live",
+    )
     db.add(competition)
-    log(db, "admin", "competition_created", name=name)
+    log(db, "admin", "competition_created", user.id, name=name)
     db.commit()
     return competition

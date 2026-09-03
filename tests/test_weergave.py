@@ -11,9 +11,7 @@ from __future__ import annotations
 import re
 
 from app.importer import import_csv
-from tests.helpers import entry_van, vul_kaart
-
-ADMIN = {"wachtwoord": "testwachtwoord"}
+from tests.helpers import entry_van, login_admin, vul_kaart
 
 
 def _kolommen(html: str) -> list[str]:
@@ -163,7 +161,7 @@ def test_de_kaart_zelf_blijft_het_grootst(db, wedstrijd, als_speler):
 def test_de_rail_noemt_alles_wat_je_kunt_doen(db, wedstrijd, client):
     """Gegroepeerd naar wanneer je het nodig hebt, het gevaarlijkste onderaan."""
     competition, _ = wedstrijd
-    client.post("/admin/login", data=ADMIN)
+    login_admin(client)
 
     pagina = client.get(f"/admin/c/{competition.id}").text
 
@@ -178,7 +176,7 @@ def test_de_rail_noemt_alles_wat_je_kunt_doen(db, wedstrijd, client):
 def test_de_rail_wijst_het_paneel_aan_dat_openstaat(db, wedstrijd, client):
     """Zonder keuze staat de spelerslijst open; met ?p= dat paneel."""
     competition, _ = wedstrijd
-    client.post("/admin/login", data=ADMIN)
+    login_admin(client)
 
     standaard = client.get(f"/admin/c/{competition.id}").text
     export = client.get(f"/admin/c/{competition.id}?p=export").text
@@ -196,7 +194,7 @@ def test_voortgangsstrip_volgt_de_bevestigde_holes(db, wedstrijd, client):
     """Elke hole een streepje, gevuld zodra speler en marker het eens zijn."""
     competition, _ = wedstrijd
     vul_kaart(db, entry_van(db, "Jan"), 4, holes=3)
-    client.post("/admin/login", data=ADMIN)
+    login_admin(client)
 
     pagina = client.get(f"/admin/c/{competition.id}").text
 
@@ -209,7 +207,7 @@ def test_voortgangsstrip_volgt_de_bevestigde_holes(db, wedstrijd, client):
 def test_mislukte_import_opent_het_importpaneel(db, wedstrijd, client):
     """Anders staat de foutmelding in beeld terwijl het geplakte bestand elders zit."""
     competition, _ = wedstrijd
-    client.post("/admin/login", data=ADMIN)
+    login_admin(client)
 
     antwoord = client.post(
         f"/admin/c/{competition.id}/import",

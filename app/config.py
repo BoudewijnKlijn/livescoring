@@ -13,8 +13,11 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://livescoring:livescoring@localhost:5434/livescoring"
     secret_key: str = "dev-secret-niet-gebruiken-in-productie"
-    admin_password: str = "admin"
     base_url: str = "http://localhost:8000"
+
+    # Wie eigenaar wordt van wedstrijden die er nog geen hebben. Alleen nodig bij het
+    # bijwerken van een database van voor de accounts; daarna mag hij weg.
+    owner_email: str = ""
     cookie_secure: bool = False
 
     # Bevestigingsmail na het tekenen. Leeg = uit, en dan wordt er niets verstuurd.

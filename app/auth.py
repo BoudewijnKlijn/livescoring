@@ -3,6 +3,10 @@
 Spelers loggen in via een persoonlijke link `/t/{token}`. Alleen de sha256-hash van het
 token staat in de database. De cookie bevat het entry-id plus een prefix van de tokenhash,
 zodat het roteren van een link ook lopende sessies ongeldig maakt.
+
+De wedstrijdleiding zit achter een tweede cookie, met het id van haar account uit
+`app.account`. Elke wedstrijd heeft een eigenaar en iedereen ziet alleen zijn eigen
+wedstrijden; er is geen ingang die alles ziet.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Entry, get_db
+from app.models import Entry, User, get_db
 
 PLAYER_COOKIE = "speler"
 ADMIN_COOKIE = "admin"
@@ -81,9 +85,9 @@ def login_player(response: Response, entry: Entry) -> None:
     _set_cookie(response, PLAYER_COOKIE, _serializer.dumps(payload), PLAYER_MAX_AGE)
 
 
-def login_admin(response: Response) -> None:
-    """Zet de admincookie."""
-    _set_cookie(response, ADMIN_COOKIE, _serializer.dumps({"admin": True}), ADMIN_MAX_AGE)
+def login_user(response: Response, user: User) -> None:
+    """Zet de admincookie voor een account van de wedstrijdleiding."""
+    _set_cookie(response, ADMIN_COOKIE, _serializer.dumps({"u": user.id}), ADMIN_MAX_AGE)
 
 
 def logout(response: Response) -> None:
@@ -115,17 +119,20 @@ def current_entry(request: Request, db: DbSession) -> Entry:
     return entry
 
 
-def require_admin(request: Request) -> bool:
-    """Controleer de admincookie, of stuur door naar het inlogscherm."""
-    if not _load(request.cookies.get(ADMIN_COOKIE), ADMIN_MAX_AGE):
+def current_admin(request: Request, db: DbSession) -> User:
+    """De ingelogde wedstrijdleiding.
+
+    Geen cookie is geen fout maar een omleiding naar het inlogscherm. Een account dat
+    intussen zijn bevestiging is kwijtgeraakt telt niet meer als ingelogd.
+    """
+    payload = _load(request.cookies.get(ADMIN_COOKIE), ADMIN_MAX_AGE)
+    if not payload:
         raise LoginRequired
-    return True
-
-
-def check_admin_password(password: str) -> bool:
-    """Vergelijk het adminwachtwoord in constante tijd."""
-    return secrets.compare_digest(password, settings.admin_password)
+    user = db.get(User, payload.get("u"))
+    if user is None or user.confirmed_at is None:
+        raise LoginRequired
+    return user
 
 
 CurrentEntry = Annotated[Entry, Depends(current_entry)]
-AdminOnly = Annotated[bool, Depends(require_admin)]
+CurrentAdmin = Annotated[User, Depends(current_admin)]

@@ -14,6 +14,20 @@ from sqlalchemy import select
 from app.models import Entry, Player, Round
 from app.scoring import leaderboard, set_score
 
+# Het account uit de `gebruiker`-fixture. Elke wedstrijd heeft een eigenaar, dus elke test
+# die het beheerscherm aanraakt logt in als deze wedstrijdleider.
+LEIDING = "leiding@club.nl"
+WACHTWOORD = "testwachtwoord"
+
+
+def login_admin(client, email: str = LEIDING, wachtwoord: str = WACHTWOORD):
+    """Log in als wedstrijdleider en geef de client terug."""
+    antwoord = client.post(
+        "/admin/login", data={"email": email, "wachtwoord": wachtwoord}, follow_redirects=False
+    )
+    assert antwoord.status_code == 303, antwoord.text
+    return client
+
 
 def entry_van(db, naam: str, ronde: int = 1) -> Entry:
     """De deelname van een speler in een ronde."""

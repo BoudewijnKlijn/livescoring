@@ -2,7 +2,12 @@
 
 De admin is de enige die de invoer van een ander mag overschrijven, een kaart mag
 ontgrendelen en een link mag vervangen. Elke ingreep gaat naar de audit log.
-De downloads staan in `app.export`; dat is het enige hier dat niets wijzigt.
+De downloads staan in `app.export`; dat is het enige hier dat niets wijzigt. Het aanmaken van
+een account, inloggen en uitloggen staat in `app.account`.
+
+Elke route hier begint bij `get_competition`, `get_round` of `get_entry`. Die drie kijken naar
+de eigenaar: een wedstrijdleider komt alleen bij zijn eigen wedstrijden, en een id van een
+ander bestaat voor hem niet. Er is geen ingang die alles ziet.
 """
 
 from __future__ import annotations
@@ -14,18 +19,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
-from app.auth import (
-    AdminOnly,
-    AppError,
-    DbSession,
-    check_admin_password,
-    login_admin,
-    logout,
-    new_token,
-)
+from app.auth import AppError, CurrentAdmin, DbSession, new_token
 from app.config import settings
 from app.importer import create_competition, import_csv
-from app.models import HOLES, Competition, Entry, Flight, HoleScore, Round, now
+from app.models import HOLES, Competition, Entry, Flight, HoleScore, Round, User, now
 from app.scoring import build_card, log
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -56,40 +53,20 @@ def _links_page(
     )
 
 
-@router.get("/login", response_class=HTMLResponse)
-def login_form(request: Request) -> HTMLResponse:
-    """Inlogformulier voor de wedstrijdleiding."""
-    return templates.TemplateResponse(request, "admin_login.html", {"error": None})
-
-
-@router.post("/login")
-def do_login(request: Request, wachtwoord: str = Form("")) -> Response:
-    """Controleer het adminwachtwoord."""
-    if not check_admin_password(wachtwoord):
-        return templates.TemplateResponse(
-            request, "admin_login.html", {"error": "Onjuist wachtwoord."}, status_code=401
-        )
-    response = RedirectResponse("/admin", status_code=303)
-    login_admin(response)
-    return response
-
-
-@router.post("/logout")
-def do_logout() -> Response:
-    """Uitloggen."""
-    response = RedirectResponse("/admin/login", status_code=303)
-    logout(response)
-    return response
-
-
 @router.get("", response_class=HTMLResponse)
-def index(request: Request, db: DbSession, _: AdminOnly) -> HTMLResponse:
-    """Overzicht van alle wedstrijden, met de verborgen wedstrijden apart."""
-    alle = db.scalars(select(Competition).order_by(Competition.created_at.desc())).all()
+def index(request: Request, db: DbSession, gebruiker: CurrentAdmin) -> HTMLResponse:
+    """Overzicht van de eigen wedstrijden, met de verborgen wedstrijden apart."""
+    query = (
+        select(Competition)
+        .where(Competition.user_id == gebruiker.id)
+        .order_by(Competition.created_at.desc())
+    )
+    alle = db.scalars(query).all()
     return templates.TemplateResponse(
         request,
         "admin_index.html",
         {
+            "gebruiker": gebruiker,
             "actief": [c for c in alle if c.status != "closed"],
             "verborgen": [c for c in alle if c.status == "closed"],
         },
@@ -97,28 +74,58 @@ def index(request: Request, db: DbSession, _: AdminOnly) -> HTMLResponse:
 
 
 @router.post("/c/{competition_id}/verbergen")
-def verbergen(competition_id: int, db: DbSession, _: AdminOnly, terug: str = Form("")) -> Response:
+def verbergen(
+    competition_id: int, db: DbSession, gebruiker: CurrentAdmin, terug: str = Form("")
+) -> Response:
     """Zet een wedstrijd op verborgen of weer terug. Er wordt niets verwijderd."""
-    competition = get_competition(db, competition_id)
+    competition = get_competition(db, competition_id, gebruiker)
     competition.status = "live" if terug else "closed"
-    log(db, "admin", "verbergen", competition=competition.id, status=competition.status)
+    log(
+        db, "admin", "verbergen", gebruiker.id,
+        competition=competition.id, status=competition.status,
+    )
     db.commit()
     return RedirectResponse("/admin", status_code=303)
 
 
 @router.post("/competition")
-def new_competition(db: DbSession, _: AdminOnly, naam: str = Form(...)) -> Response:
-    """Maak een nieuwe competitie."""
-    competition = create_competition(db, naam.strip() or "Naamloze wedstrijd")
+def new_competition(db: DbSession, gebruiker: CurrentAdmin, naam: str = Form(...)) -> Response:
+    """Maak een nieuwe competitie, op naam van wie hem aanmaakt."""
+    competition = create_competition(db, naam.strip() or "Naamloze wedstrijd", gebruiker)
     return RedirectResponse(f"/admin/c/{competition.id}", status_code=303)
 
 
-def get_competition(db: DbSession, competition_id: int) -> Competition:
-    """Zoek een wedstrijd op, of geef een nette 404. Ook gebruikt door `app.export`."""
+def get_competition(db: DbSession, competition_id: int, gebruiker: User) -> Competition:
+    """Zoek een wedstrijd van deze gebruiker op, of geef een nette 404.
+
+    Andermans wedstrijd bestaat niet in plaats van dat hij verboden is: dan verklapt het
+    raden van een id ook niet dat er iets te vinden was. Ook gebruikt door `app.export`.
+    """
     competition = db.get(Competition, competition_id)
-    if competition is None:
+    if competition is None or not _van(competition, gebruiker):
         raise AppError("Deze competitie bestaat niet.", 404)
     return competition
+
+
+def _van(competition: Competition, gebruiker: User) -> bool:
+    """Mag deze gebruiker bij deze wedstrijd?"""
+    return competition.user_id == gebruiker.id
+
+
+def get_round(db: DbSession, round_id: int, gebruiker: User) -> Round:
+    """Zoek een ronde uit een eigen wedstrijd op, of geef een nette 404."""
+    rnd = db.get(Round, round_id)
+    if rnd is None or not _van(rnd.competition, gebruiker):
+        raise AppError("Deze ronde bestaat niet.", 404)
+    return rnd
+
+
+def get_entry(db: DbSession, entry_id: int, gebruiker: User) -> Entry:
+    """Zoek een deelname uit een eigen wedstrijd op, of geef een nette 404."""
+    entry = db.get(Entry, entry_id)
+    if entry is None or not _van(entry.round.competition, gebruiker):
+        raise AppError("Deze deelname bestaat niet.", 404)
+    return entry
 
 
 PANELEN = (
@@ -157,10 +164,14 @@ def _beheer(competition: Competition, paneel: str = "spelers", **extra) -> dict:
 
 @router.get("/c/{competition_id}", response_class=HTMLResponse)
 def competition_page(
-    request: Request, competition_id: int, db: DbSession, _: AdminOnly, p: str = "spelers"
+    request: Request,
+    competition_id: int,
+    db: DbSession,
+    gebruiker: CurrentAdmin,
+    p: str = "spelers",
 ) -> HTMLResponse:
     """Beheerscherm van één competitie. `p` kiest het paneel dat rechts opengaat."""
-    competition = get_competition(db, competition_id)
+    competition = get_competition(db, competition_id, gebruiker)
     return templates.TemplateResponse(
         request, "admin_competition.html", _beheer(competition, p)
     )
@@ -171,11 +182,11 @@ def do_import(
     request: Request,
     competition_id: int,
     db: DbSession,
-    _: AdminOnly,
+    gebruiker: CurrentAdmin,
     csv_tekst: str = Form(""),
 ) -> HTMLResponse:
     """Importeer spelers, flights en markers uit geplakte CSV."""
-    competition = get_competition(db, competition_id)
+    competition = get_competition(db, competition_id, gebruiker)
     result = import_csv(db, competition, csv_tekst)
     if not result.ok:
         return templates.TemplateResponse(
@@ -193,16 +204,14 @@ def do_import(
 
 @router.post("/round/{round_id}/pars")
 def set_pars(
-    round_id: int, db: DbSession, _: AdminOnly, pars: str = Form("")
+    round_id: int, db: DbSession, gebruiker: CurrentAdmin, pars: str = Form("")
 ) -> Response:
     """Zet de 18 pars van een ronde, komma- of spatiegescheiden."""
-    rnd = db.get(Round, round_id)
-    if rnd is None:
-        raise AppError("Deze ronde bestaat niet.", 404)
+    rnd = get_round(db, round_id, gebruiker)
     values = [int(p) for p in pars.replace(",", " ").split() if p.strip().isdigit()]
     if len(values) == HOLES:
         rnd.pars = values
-        log(db, "admin", "pars", round=round_id, pars=values)
+        log(db, "admin", "pars", gebruiker.id, round=round_id, pars=values)
         db.commit()
     return RedirectResponse(f"/admin/c/{rnd.competition_id}", status_code=303)
 
@@ -231,15 +240,13 @@ def _deelnames(competition: Competition) -> list[dict]:
 def override_score(
     entry_id: int,
     db: DbSession,
-    _: AdminOnly,
+    gebruiker: CurrentAdmin,
     hole: int = Form(...),
     strokes: str = Form(""),
     reden: str = Form(""),
 ) -> Response:
     """Overschrijf beide bronnen van één hole. Reden is verplicht."""
-    entry = db.get(Entry, entry_id)
-    if entry is None:
-        raise AppError("Deze deelname bestaat niet.", 404)
+    entry = get_entry(db, entry_id, gebruiker)
     if not reden.strip():
         raise AppError("Vul een reden in bij een correctie. Er is niets gewijzigd.", 400)
     value = int(strokes) if strokes.strip() else None
@@ -258,46 +265,53 @@ def override_score(
             db.add(row)
         row.strokes = value
         row.updated_at = now()
-    log(db, "admin", "override", entry=entry.id, hole=hole, strokes=value, reason=reden.strip())
+    log(
+        db, "admin", "override", gebruiker.id,
+        entry=entry.id, hole=hole, strokes=value, reason=reden.strip(),
+    )
     db.commit()
     return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
 
 
 @router.post("/entry/{entry_id}/status")
 def set_status(
-    entry_id: int, db: DbSession, _: AdminOnly, status: str = Form(...), reden: str = Form("")
+    entry_id: int,
+    db: DbSession,
+    gebruiker: CurrentAdmin,
+    status: str = Form(...),
+    reden: str = Form(""),
 ) -> Response:
     """Zet de status van een deelname: ok, dq, nr of wd."""
-    entry = db.get(Entry, entry_id)
-    if entry is None or status not in ("ok", "dq", "nr", "wd"):
-        raise AppError("Onbekende deelname of status.", 404)
+    entry = get_entry(db, entry_id, gebruiker)
+    if status not in ("ok", "dq", "nr", "wd"):
+        raise AppError("Onbekende status.", 404)
     entry.status = status
-    log(db, "admin", "status", entry=entry.id, status=status, reason=reden.strip())
+    log(db, "admin", "status", gebruiker.id, entry=entry.id, status=status, reason=reden.strip())
     db.commit()
     return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
 
 
 @router.post("/entry/{entry_id}/unlock")
-def unlock(entry_id: int, db: DbSession, _: AdminOnly, reden: str = Form("")) -> Response:
+def unlock(
+    entry_id: int, db: DbSession, gebruiker: CurrentAdmin, reden: str = Form("")
+) -> Response:
     """Ontgrendel een getekende kaart."""
-    entry = db.get(Entry, entry_id)
-    if entry is None:
-        raise AppError("Deze deelname bestaat niet.", 404)
+    entry = get_entry(db, entry_id, gebruiker)
     entry.locked = False
     entry.signed_at = None
-    log(db, "admin", "unlock", entry=entry.id, reason=reden.strip())
+    log(db, "admin", "unlock", gebruiker.id, entry=entry.id, reason=reden.strip())
     db.commit()
     return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
 
 
-def _rotate(db: DbSession, entries: list[Entry]) -> list[tuple[str, int, str]]:
+def _rotate(db: DbSession, entries: list[Entry], eigenaar_id: int) -> list[tuple[str, int, str]]:
     """Geef elke entry een nieuw token. Scores blijven staan."""
     links = []
     for entry in entries:
         token, token_hash = new_token()
         entry.token_hash = token_hash
         links.append((entry.player.name, entry.round.no, token))
-        log(db, "admin", "rotate", entry=entry.id)
+        log(db, "admin", "rotate", eigenaar_id, entry=entry.id)
     db.commit()
     return links
 
@@ -312,7 +326,7 @@ def rotate_scope(
     request: Request,
     competition_id: int,
     db: DbSession,
-    _: AdminOnly,
+    gebruiker: CurrentAdmin,
     scope: str = Form("competition"),
     flight_id: str = Form(""),
     entry_id: str = Form(""),
@@ -320,13 +334,13 @@ def rotate_scope(
     verwacht: str = Form(""),
 ) -> HTMLResponse:
     """Maak nieuwe links voor een speler, een flight of de hele competitie."""
-    competition = get_competition(db, competition_id)
+    competition = get_competition(db, competition_id, gebruiker)
     # Elke keuze wijst zichzelf aan. Een lege keuze is een fout, nooit stilzwijgend
     # "dan maar iedereen": dat kost negenendertig spelers hun link om er één te helpen.
     if scope == "entry":
         if not entry_id:
             raise AppError("Kies eerst een speler. Er is niets gewijzigd.", 400)
-        entries = [db.get(Entry, int(entry_id))]
+        entries = [get_entry(db, int(entry_id), gebruiker)]
     elif scope == "flight":
         if not flight_id:
             raise AppError("Kies eerst een flight. Er is niets gewijzigd.", 400)
@@ -340,9 +354,16 @@ def rotate_scope(
         ]
     else:
         raise AppError("Onbekende keuze. Er is niets gewijzigd.", 400)
-    entries = [e for e in entries if e is not None]
+    # Een gekozen speler of flight kan uit een andere wedstrijd komen: het formulier is te
+    # vervalsen. Wat niet bij deze wedstrijd hoort valt af, dus niemand raakt zijn link kwijt
+    # door het id van een ander mee te sturen.
+    entries = [
+        e
+        for e in entries
+        if e is not None and e.round.competition_id == competition.id
+    ]
     _check_code(code, verwacht)
-    links = _rotate(db, entries)
+    links = _rotate(db, entries, gebruiker.id)
     note = (
         f"{len(links)} nieuwe link(s) gemaakt. De vorige link van deze speler(s) werkt niet "
         "meer; die van de anderen blijft gewoon werken. Scores zijn ongewijzigd."
@@ -354,22 +375,20 @@ def rotate_scope(
 def reset_card(
     entry_id: int,
     db: DbSession,
-    _: AdminOnly,
+    gebruiker: CurrentAdmin,
     code: str = Form(""),
     verwacht: str = Form(""),
     reden: str = Form(""),
 ) -> Response:
     """Wis alle scores van een kaart. Losstaand van het vervangen van een link."""
-    entry = db.get(Entry, entry_id)
-    if entry is None:
-        raise AppError("Deze deelname bestaat niet.", 404)
+    entry = get_entry(db, entry_id, gebruiker)
     if entry.scores:
         _check_code(code, verwacht)
     for row in list(entry.scores):
         db.delete(row)
     entry.signed_at = None
     entry.locked = False
-    log(db, "admin", "reset_card", entry=entry.id, reason=reden.strip())
+    log(db, "admin", "reset_card", gebruiker.id, entry=entry.id, reason=reden.strip())
     db.commit()
     return RedirectResponse(f"/admin/c/{entry.round.competition_id}", status_code=303)
 
@@ -378,7 +397,7 @@ def reset_card(
 def wis_spelers(
     competition_id: int,
     db: DbSession,
-    _: AdminOnly,
+    gebruiker: CurrentAdmin,
     code: str = Form(""),
     verwacht: str = Form(""),
 ) -> Response:
@@ -387,7 +406,7 @@ def wis_spelers(
     Bedoeld om opnieuw te beginnen met een verbeterd CSV-bestand. De competitie zelf en de
     leaderboardlink blijven bestaan.
     """
-    competition = get_competition(db, competition_id)
+    competition = get_competition(db, competition_id, gebruiker)
     _check_code(code, verwacht)
     aantal = sum(len(rnd.entries) for rnd in competition.rounds)
     for rnd in competition.rounds:
@@ -398,6 +417,6 @@ def wis_spelers(
         db.delete(rnd)
     for player in list(competition.players):
         db.delete(player)
-    log(db, "admin", "wis_spelers", competition=competition.id, deelnames=aantal)
+    log(db, "admin", "wis_spelers", gebruiker.id, competition=competition.id, deelnames=aantal)
     db.commit()
     return RedirectResponse(f"/admin/c/{competition_id}", status_code=303)

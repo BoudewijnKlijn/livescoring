@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Wedstrijden{% endblock %}
 {% block kop %}Wedstrijden{% endblock %}
+{% block subkop %}{{ gebruiker.email }}{% endblock %}
 {% block headeractie %}
 <form method="post" action="/admin/logout"><button class="knop secundair">Uitloggen</button></form>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""Bevestigingsmail naar de speler zodra hij zijn kaart getekend heeft.
+"""De mail die de app verstuurt: de scorekaart van een speler en de bevestiging van een account.
 
 Verstuurd via de HTTP-API van Brevo en bewust niet via SMTP. De gratis web services van
 Render blokkeren sinds 26 september 2025 al het uitgaande verkeer naar poort 25, 465 en 587,
@@ -35,26 +35,85 @@ ACHTERGROND = {"eagle": "#ffd84d", "birdie": "#ed5b5b", "bogey": "#a9d5e9", "dub
 WITTE_TEKST = {"birdie", "dubbel"}
 
 
+def bericht(
+    email: str | None, naam: str, onderwerp: str, tekst: str, inhoud: str
+) -> dict | None:
+    """Bouw één bericht, of None als er niets te sturen valt.
+
+    De ene plek waar besloten wordt of er gemaild wordt: zonder sleutel, zonder afzender of
+    zonder geldig adres komt er niets uit, en dan raakt geen enkele aanroeper de mailprovider.
+    """
+    adres = (email or "").strip()
+    if not (settings.brevo_api_key and settings.mail_from) or "@" not in adres:
+        return None
+    return {
+        "sender": {"name": settings.mail_from_name, "email": settings.mail_from},
+        "to": [{"email": adres, "name": naam}],
+        "subject": onderwerp,
+        "textContent": tekst,
+        "htmlContent": inhoud,
+    }
+
+
 def kaart_bericht(entry: Entry, card: Card) -> dict | None:
     """Bouw het bericht voor een zojuist getekende kaart, of None als er niets te sturen valt.
 
     Wordt aangeroepen terwijl de databasesessie nog openstaat en levert platte tekst op, zodat
     het versturen daarna zonder database kan.
     """
-    adres = (entry.player.email or "").strip()
-    if not (settings.brevo_api_key and settings.mail_from) or "@" not in adres:
-        return None
-
     ronde = entry.round
-    competitie = ronde.competition
-    onderwerp = f"Scorekaart getekend - {competitie.name}, ronde {ronde.no}"
-    return {
-        "sender": {"name": settings.mail_from_name, "email": settings.mail_from},
-        "to": [{"email": adres, "name": entry.player.name}],
-        "subject": onderwerp,
-        "textContent": _tekst(entry, card),
-        "htmlContent": _html(entry, card, onderwerp),
-    }
+    onderwerp = f"Scorekaart getekend - {ronde.competition.name}, ronde {ronde.no}"
+    return bericht(
+        entry.player.email,
+        entry.player.name,
+        onderwerp,
+        _tekst(entry, card),
+        _html(entry, card, onderwerp),
+    )
+
+
+def account_bericht(email: str, link: str) -> dict | None:
+    """Bouw de mail waarmee een wedstrijdleider zijn adres bevestigt."""
+    onderwerp = "Bevestig je account voor Live scoring"
+    return bericht(email, email, onderwerp, _account_tekst(link), _account_html(link, onderwerp))
+
+
+def _account_tekst(link: str) -> str:
+    """De platte-tekstversie van de bevestigingsmail."""
+    return f"""Welkom bij Live scoring,
+
+Er is een account aangemaakt op dit e-mailadres. Bevestig het met deze link, daarna kun
+je inloggen en je eerste wedstrijd aanmaken:
+
+{link}
+
+Heb je zelf geen account aangemaakt, dan hoef je niets te doen: zonder bevestiging kan er
+niet met dit adres worden ingelogd.
+"""
+
+
+def _account_html(link: str, onderwerp: str) -> str:
+    """De opgemaakte versie van de bevestigingsmail."""
+    veilig = html.escape(link)
+    return f"""\
+<div style="font-family:Helvetica,Arial,sans-serif;color:#333;max-width:520px;margin:0 auto;
+            padding:20px 4px;line-height:1.5">
+  <p>Welkom bij Live scoring,</p>
+  <p>Er is een account aangemaakt op dit e-mailadres. Bevestig het hieronder, daarna kun je
+  inloggen en je eerste wedstrijd aanmaken.</p>
+  <p style="margin:22px 0">
+    <a href="{veilig}"
+       style="background:#005b9a;color:#fff;text-decoration:none;padding:11px 18px;
+              display:inline-block;font-weight:600">Bevestig je account</a>
+  </p>
+  <p style="font-size:0.85rem;color:#555">Werkt de knop niet, plak dan deze link in je
+  browser:<br><a href="{veilig}">{veilig}</a></p>
+  <p style="color:#777;font-size:0.8rem;margin-top:26px;border-top:1px solid #e2e2e2;
+            padding-top:12px">
+    {html.escape(onderwerp)}. Heb je zelf geen account aangemaakt, dan hoef je niets te doen:
+    zonder bevestiging kan er niet met dit adres worden ingelogd.
+  </p>
+</div>"""
 
 
 def verstuur(bericht: dict) -> None:

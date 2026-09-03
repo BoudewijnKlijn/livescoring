@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.admin import get_competition
-from app.auth import AdminOnly, DbSession
+from app.auth import CurrentAdmin, DbSession
 from app.models import HOLES, AuditLog
 from app.scoring import build_card
 
@@ -36,9 +36,11 @@ def _csv_response(kop: list[str], rijen: list[list], bestandsnaam: str) -> Strea
 
 
 @router.get("/c/{competition_id}/export.csv")
-def export_csv(competition_id: int, db: DbSession, _: AdminOnly) -> StreamingResponse:
+def export_csv(
+    competition_id: int, db: DbSession, gebruiker: CurrentAdmin
+) -> StreamingResponse:
     """Alle kaarten van één wedstrijd: een regel per speler per ronde."""
-    competition = get_competition(db, competition_id)
+    competition = get_competition(db, competition_id, gebruiker)
     rijen = []
     for rnd in competition.rounds:
         for entry in sorted(rnd.entries, key=lambda e: e.player.name):
@@ -70,15 +72,18 @@ def export_csv(competition_id: int, db: DbSession, _: AdminOnly) -> StreamingRes
 
 
 @router.get("/audit.csv")
-def export_audit(db: DbSession, _: AdminOnly) -> StreamingResponse:
-    """De audit log van alle wedstrijden: elke correctie en ingreep, met reden.
+def export_audit(db: DbSession, gebruiker: CurrentAdmin) -> StreamingResponse:
+    """De audit log van alle eigen wedstrijden: elke correctie en ingreep, met reden.
 
-    Bewust niet per wedstrijd. Een regel verwijst naar een deelname of een ronde, en juist
-    na het verwijderen van alle spelers zijn die er niet meer om op te filteren. Dan zou de
-    export leeg zijn op het moment dat je hem het hardst nodig hebt.
+    Wel per wedstrijdleider, bewust niet per wedstrijd. Een regel verwijst naar een deelname
+    of een ronde, en juist na het verwijderen van alle spelers zijn die er niet meer om op te
+    filteren. Dan zou de export leeg zijn op het moment dat je hem het hardst nodig hebt. De
+    eigenaar staat wel op elke regel zelf, dus die blijft ook daarna te filteren.
     """
     rijen = [
         [row.at.isoformat(timespec="seconds"), row.actor, row.action, row.detail]
-        for row in db.scalars(select(AuditLog).order_by(AuditLog.at))
+        for row in db.scalars(
+            select(AuditLog).where(AuditLog.user_id == gebruiker.id).order_by(AuditLog.at)
+        )
     ]
     return _csv_response(["tijdstip", "wie", "actie", "details"], rijen, "auditlog.csv")

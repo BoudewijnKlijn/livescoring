@@ -35,12 +35,57 @@ ronde 2 halverwege, plus een uitvaller en een betwiste hole. Dat is het bord in 
 |---|---|---|
 | `DATABASE_URL` | ja | `postgresql+psycopg://...`. Lokaal die uit `.env.example`, in productie de Supabase **session pooler**. |
 | `SECRET_KEY` | ja | Ondertekent de cookies. Wijzig je hem, dan is iedereen uitgelogd. |
-| `ADMIN_PASSWORD` | ja | Wachtwoord voor `/admin/login`. |
 | `BASE_URL` | ja | Publieke URL zonder slash op het eind. Staat in de gedeelde links. |
 | `COOKIE_SECURE` | productie | `true` achter HTTPS, `false` lokaal. |
+| `OWNER_EMAIL` | eenmalig | Wie eigenaar wordt van wedstrijden die er nog geen hebben. Alleen nodig bij het bijwerken van een database van voor de accounts. |
 | `BREVO_API_KEY` | nee | Sleutel voor de bevestigingsmail. Leeg = geen mail. Zie hieronder. |
 | `MAIL_FROM` | bij mail | Het afzenderadres dat je bij Brevo geverifieerd hebt. |
 | `MAIL_FROM_NAME` | nee | Naam voor de afzender. Standaard `Wedstrijdleiding`. |
+
+## Accounts voor de wedstrijdleiding
+
+Een wedstrijdleider maakt zelf een account aan op `/admin/registreren`, met niet meer dan
+een e-mailadres en een wachtwoord. Hij krijgt een mail met een bevestigingslink; pas daarna
+kan hij inloggen en wedstrijden aanmaken. Elke wedstrijd heeft een eigenaar en iedereen
+ziet alleen zijn eigen wedstrijden: het overzicht toont niets van een ander, het id van een
+ander levert een 404 op in plaats van een 403 zodat het raden van een nummer ook niet
+verklapt dat er iets te vinden was, en de audit log filtert op dezelfde eigenaar. Er is
+geen ingang die alles ziet.
+
+Aan het wachtwoord worden geen eisen gesteld: wie één letter wil, mag dat. Wel staat er een
+grens op de lengte van beide velden (200 tekens voor het adres, 1024 voor het wachtwoord),
+zodat een verzoek van een megabyte niet in de database of in de scrypt-berekening
+terechtkomt. De opgeslagen hash houdt altijd dezelfde lengte, hoe lang het wachtwoord ook
+is.
+
+Van het wachtwoord bewaart de database alleen een scrypt-hash met een eigen salt per
+account. De platte waarde staat nergens en is er niet uit terug te rekenen, dus niemand kan
+hem opzoeken. Van de bevestigingslink staat net als bij de spelerslinks alleen een
+sha256-hash in de database, en die link werkt precies één keer.
+
+Zolang een adres niet bevestigd is bestaat het account wel maar kan er niet mee worden
+ingelogd. Kwam de mail niet aan, dan levert opnieuw aanmelden met hetzelfde adres een verse
+link op. Bij een adres dat al bevestigd is gebeurt dat niet: daar kan iemand anders achter
+zitten, en die zou anders zijn wachtwoord kwijtraken.
+
+Zonder `BREVO_API_KEY` kan er niet gemaild worden en komt de bevestigingslink in de log te
+staan (`Mail staat uit. Bevestigingslink voor ...`). Dat is genoeg om lokaal te werken,
+maar in productie hoort de sleutel er te zijn: zonder mail komt niemand zijn account binnen.
+
+### Een database van voor de accounts bijwerken
+
+De wedstrijden die er al waren hebben nog geen eigenaar. Bij het opstarten kijkt de app
+daarnaar en zet ze op naam van het account uit `OWNER_EMAIL`; bestaat dat account nog niet,
+dan wordt het aangemaakt zonder bruikbaar wachtwoord en zonder bevestiging. Daarna is de
+eigenaar verplicht en gebeurt er bij elke volgende start niets meer.
+
+Die eigenaar eist zijn account daarna zelf op: aanmelden op `/admin/registreren` met
+datzelfde adres. Dat is de gewone weg voor een adres dat nog niet bevestigd is, dus hij
+kiest zijn eigen wachtwoord en er staat nergens een wachtwoord in een instelling.
+
+Staat `OWNER_EMAIL` niet ingevuld terwijl er wedstrijden zonder eigenaar zijn, dan start de
+app niet en zegt hij waarom. Dat is met opzet: een wedstrijd die van niemand is, is voor
+niemand meer te beheren.
 
 ## CSV-import
 
@@ -134,7 +179,7 @@ dezelfde `DATABASE_URL`.
 
 ## De dag zelf
 
-1. Maak de wedstrijd aan op `/admin` en plak de CSV.
+1. Log in op `/admin` en maak de wedstrijd aan, dan plak je de CSV.
 2. **Kopieer meteen de linkenlijst.** Alleen de hash van een token staat in de database, dus
    de links zijn achteraf niet meer op te vragen. Kwijt? Gebruik *Alle links vervangen*: dat
    maakt verse links voor de hele wedstrijd en laat alle scores staan. Gaat het om één

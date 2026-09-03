@@ -13,7 +13,7 @@ from sqlalchemy import select
 from app.importer import create_competition, import_csv
 from app.models import Entry, Player, Round
 from app.scoring import build_card, sign_card
-from tests.helpers import entry_van, vul_kaart
+from tests.helpers import entry_van, login_admin, vul_kaart
 
 BASIS = """naam,email,ronde,flight,starthole,marker
 Jan,jan@x.nl,1,A,1,Piet
@@ -24,9 +24,9 @@ Kees,kees@x.nl,1,B,10,Anne
 
 
 @pytest.fixture
-def veld(db):
+def veld(db, gebruiker):
     """Vier spelers in twee flights, markers over en weer."""
-    competition = create_competition(db, "Herimport")
+    competition = create_competition(db, "Herimport", gebruiker)
     result = import_csv(db, competition, BASIS)
     assert result.ok, result.errors
     return competition
@@ -275,7 +275,7 @@ def test_nieuwe_spelers_krijgen_oplopende_plekken(db, veld):
 
 def test_geweigerde_import_toont_de_beheerpagina_met_de_fouten(db, veld, client):
     """Na een teruggedraaide import moet de pagina het nog gewoon doen."""
-    client.post("/admin/login", data={"wachtwoord": "testwachtwoord"})
+    login_admin(client)
 
     response = client.post(
         f"/admin/c/{veld.id}/import",
@@ -316,9 +316,9 @@ def test_een_marker_mag_niet_bij_twee_spelers_staan(db, veld):
     assert _foto(db) == voor
 
 
-def test_een_eerste_import_zonder_markers_gaat_niet_door(db):
+def test_een_eerste_import_zonder_markers_gaat_niet_door(db, gebruiker):
     """De eis geldt ook meteen bij het opzetten van de wedstrijd."""
-    competition = create_competition(db, "Zonder markers")
+    competition = create_competition(db, "Zonder markers", gebruiker)
 
     result = import_csv(
         db, competition, "naam,ronde,flight,starthole,marker\nJan,1,A,1,\nPiet,1,A,1,\n"

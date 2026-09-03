@@ -7,8 +7,8 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false          # Supabase session pooler, zie README
-      - key: ADMIN_PASSWORD
-        sync: false
+      - key: OWNER_EMAIL
+        sync: false          # eenmalig, zie README: eigenaar van de oude wedstrijden
       - key: BASE_URL
         sync: false          # https://<naam>.onrender.com
       - key: SECRET_KEY
