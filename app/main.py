@@ -82,10 +82,10 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/")
-def home() -> RedirectResponse:
-    """Stuur door naar het spelersscherm."""
-    return RedirectResponse("/me/card", status_code=303)
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request) -> HTMLResponse:
+    """Voordeur op het kale domein. Nog leeg, wordt later gevuld."""
+    return templates.TemplateResponse(request, "home.html")
 
 
 @app.get("/t/{token}")
